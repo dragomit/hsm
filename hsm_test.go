@@ -46,6 +46,7 @@ func makeA(txt string) func(Event) {
 func TestHsm(t *testing.T) {
 	h := hs{}
 	h.sm.State.name = "SM"
+	h.sm.State.local = true
 
 	s0 := h.sm.AddState("s0", WithEntry(makeA("enter S0")), WithExit(makeA("exit S0")), WithInitial())
 	s1 := s0.AddState("s1", WithInitial(), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))

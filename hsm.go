@@ -87,7 +87,7 @@ func WithLocal() TransitionOption {
 }
 
 func (s *State) AddState(name string, opts ...StateOption) *State {
-	ss := State{parent: s, name: name}
+	ss := State{parent: s, name: name, local: s.local}
 	for _, opt := range opts {
 		opt(&ss)
 	}
@@ -195,10 +195,14 @@ func (sm *StateMachine) Deliver(e Event) {
 		lcs = srcPath[i]
 	}
 
-	if t.local && src != dst && (src.parent == lcs || dst.parent == lcs) {
-		// we have local transition specified, and one of the src/dst states is the superstate of the other
-		// we need to adjust lcs so we don't leave and re-enter the superstate
-		if 
+	if t.local {
+		if parent := getParent(src, dst); parent != nil {
+			// we have local transition specified, and one of the src/dst states is the superstate of the other
+			// move LCS one step down, so we don't leave the superstate
+			lcs = parent
+			// also adjust j, so we don't re-enter superstate
+			j--
+		}
 	}
 
 	// move up from current state to LCS, and exit every state along the way (excluding lcs)
