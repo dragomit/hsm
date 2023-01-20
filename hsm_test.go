@@ -50,10 +50,8 @@ func TestHsm(t *testing.T) {
 	}
 
 	h := hs{}
-	h.sm.State.name = "SM"
-	h.sm.State.local = true
 
-	s0 := h.sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial())
+	s0 := h.sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial(), WithLocalDefault(true))
 	s1 := s0.AddState("s1", WithInitial(), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
 	s11 := s1.AddState("s11", WithInitial(), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
 	s2 := s0.AddState("s2", WithEntry(makeA("enter s2")), WithExit(makeA("exit s2")))

@@ -12,7 +12,7 @@ type State struct {
 }
 
 type StateMachine struct {
-	State
+	top     State
 	current *State
 }
 
@@ -100,10 +100,15 @@ func (s *State) AddTransition(eventId int, target *State, opts ...TransitionOpti
 		eventId: eventId,
 		target:  target,
 	}
-	if parent := getParent(s, target); parent != nil {
-		// this is a transition where local vs external can make a difference
-		// use default from the parent states
-		t.local = parent.local
+	if s.local || target.local {
+		// One of the two states has enabled local transitions.
+		// This is applicable to this transition only if one of these states is contained
+		// (directly or transitively) in the other one.
+		if parent := getParent(s, target); parent != nil {
+			// this is a transition where local vs external can make a difference
+			// use default from the parent state
+			t.local = parent.local
+		}
 	}
 	s.transitions = append(s.transitions, &t)
 	for _, opt := range opts {
@@ -123,9 +128,13 @@ func (s *State) validate() {
 	}
 }
 
+func (sm *StateMachine) AddState(name string, opts ...StateOption) *State {
+	return sm.top.AddState(name, opts...)
+}
+
 func (sm *StateMachine) Initialize() {
 	// must be able to enter root state
-	sm.State.validate()
+	sm.top.validate()
 
 	var recurseValidate func(*State)
 	recurseValidate = func(s *State) {
@@ -137,11 +146,11 @@ func (sm *StateMachine) Initialize() {
 			recurseValidate(s1)
 		}
 	}
-	recurseValidate(&sm.State)
+	recurseValidate(&sm.top)
 
 	// drill down to the initial leaf state, running entry actions along the way
 	e := Event{EventId: -1, Data: nil} // null event
-	for s := &sm.State; s != nil; s = s.initial {
+	for s := &sm.top; s != nil; s = s.initial {
 		if s.entry != nil {
 			s.entry(e)
 		}
@@ -161,7 +170,7 @@ func (sm *StateMachine) getTransition(e Event) (*State, *transition) {
 }
 
 func (sm *StateMachine) Deliver(e Event) {
-	if !sm.State.validated {
+	if !sm.top.validated {
 		panic("State machine must be initialized before delivering the first event")
 	}
 	src, t := sm.getTransition(e)
@@ -178,7 +187,7 @@ func (sm *StateMachine) Deliver(e Event) {
 	// we've got ourselves a non-internal transition
 	dst := t.target
 	var storage1, storage2 [5]*State // avoid slice allocations for HSMs less than 6 levels deep
-	// path up the tree, starting at src/dst and ending at root state
+	// path up the tree, starting at src/dst and ending at top state
 	srcPath, dstPath := storage1[:0], storage2[:0]
 	for s := src; s != nil; s = s.parent {
 		srcPath = append(srcPath, s)
@@ -187,26 +196,25 @@ func (sm *StateMachine) Deliver(e Event) {
 		dstPath = append(dstPath, s)
 	}
 
-	// find LCS - the lowest common super-state, by walking srcPath/dstPath backwards
-	// if at least one of src/dst is root state, then LCS is nil
-	var lcs *State
+	// find LCA - the lowest common ancestor, by walking srcPath/dstPath backwards
+	// The highest LCA can be is top state, since we don't allow using this as either src or dst for transitions
 	var i, j int
-	for i, j = len(srcPath)-1, len(dstPath)-1; i > 0 && j > 0 && srcPath[i] == dstPath[j]; i, j = i-1, j-1 {
-		lcs = srcPath[i]
+	for i, j = len(srcPath)-2, len(dstPath)-2; i > 0 && j > 0 && srcPath[i] == dstPath[j]; i, j = i-1, j-1 {
 	}
+	// i and j now point to one state below LCA on srcPath and dstPath
+	lca := srcPath[i+1]
 
 	if t.local {
-		if parent := getParent(src, dst); parent != nil {
-			// we have local transition specified, and one of the src/dst states is the superstate of the other
-			// move LCS one step down, so we don't leave the superstate
-			lcs = parent
-			// also adjust j, so we don't re-enter superstate
-			j--
-		}
+		// Transition is marked as local, which means that src is contained in dst or vice-versa.
+		// For local transitions we don't want to leave and re-enter the super-state, and so we lower
+		// our positions on srcPath and dstPath one step further.
+		lca = srcPath[i]
+		i--
+		j--
 	}
 
-	// move up from current state to LCS, and exit every state along the way (excluding lcs)
-	for s := sm.current; s != lcs; s = s.parent {
+	// move up from current state to LCA, and exit every state along the way (excluding LCA)
+	for s := sm.current; s != lca; s = s.parent {
 		if s.exit != nil {
 			s.exit(e)
 		}
