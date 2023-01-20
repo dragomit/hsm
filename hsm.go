@@ -235,7 +235,7 @@ func (sm *StateMachine) Deliver(e Event) {
 
 }
 
-// getParent returns the onw of the two stats that's (direct or transitive) superstate of the other,
+// getParent returns the one of the two states that's (direct or transitive) superstate of the other,
 // or nil otherwise.
 func getParent(s1, s2 *State) *State {
 	for s := s1.parent; s != nil; s = s.parent {
