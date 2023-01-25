@@ -18,7 +18,6 @@ const (
 )
 
 type hs struct {
-	sm  StateMachine
 	foo bool
 }
 
@@ -42,21 +41,22 @@ func TestHsm(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	makeA := func(txt string) func(Event) {
-		return func(e Event) {
+	makeA := func(txt string) func(Event, *hs) {
+		return func(Event, *hs) {
 			buf.WriteString(txt)
 			buf.WriteByte('\n')
 		}
 	}
 
 	h := hs{}
+	sm := StateMachine[*hs]{}
 
-	s0 := h.sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial(), WithLocalDefault(true))
-	s1 := s0.AddState("s1", WithInitial(), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
-	s11 := s1.AddState("s11", WithInitial(), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
+	s0 := sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial[*hs](), WithLocalDefault[*hs](true))
+	s1 := s0.AddState("s1", WithInitial[*hs](), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
+	s11 := s1.AddState("s11", WithInitial[*hs](), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
 	s2 := s0.AddState("s2", WithEntry(makeA("enter s2")), WithExit(makeA("exit s2")))
-	s21 := s2.AddState("s21", WithInitial(), WithEntry(makeA("enter s21")), WithExit(makeA("exit s21")))
-	s211 := s21.AddState("s211", WithInitial(), WithEntry(makeA("enter s211")), WithExit(makeA("exit s211")))
+	s21 := s2.AddState("s21", WithInitial[*hs](), WithEntry(makeA("enter s21")), WithExit(makeA("exit s21")))
+	s211 := s21.AddState("s211", WithInitial[*hs](), WithEntry(makeA("enter s211")), WithExit(makeA("exit s211")))
 
 	s0.AddTransition(evE, s211)
 
@@ -64,33 +64,46 @@ func TestHsm(t *testing.T) {
 	s1.AddTransition(evA, s1)
 	s1.AddTransition(evC, s2)
 
-	s11.AddTransition(evH, s11, WithInternal(), WithGuard(h.isFoo), WithAction(h.unsetFoo))
+	s11.AddTransition(
+		evH,
+		s11,
+		WithInternal[*hs](),
+		WithGuard(func(event Event, h *hs) bool { return h.isFoo(event) }),
+	)
 	s11.AddTransition(evG, s211)
 
 	s2.AddTransition(evC, s1)
 	s2.AddTransition(evF, s11)
 
-	s21.AddTransition(evH, s21, WithGuard(h.isNotFoo), WithAction(h.setFoo))
+	s21.AddTransition(
+		evH,
+		s21,
+		WithGuard(func(event Event, h *hs) bool { return h.isNotFoo(event) }),
+		WithAction(func(event Event, h *hs) { h.setFoo(event) }),
+	)
 
-	h.sm.Initialize()
+	sm.Finalize()
+
+	smi := StateMachineInstance[*hs]{SM: &sm, E: &h}
+	smi.Initialize()
 
 	buf.WriteString("event A\n")
-	h.sm.Deliver(Event{evA, nil})
+	smi.Deliver(Event{evA, nil})
 
 	buf.WriteString("event E\n")
-	h.sm.Deliver(Event{evE, nil})
+	smi.Deliver(Event{evE, nil})
 
 	buf.WriteString("event E\n")
-	h.sm.Deliver(Event{evE, nil})
+	smi.Deliver(Event{evE, nil})
 
 	buf.WriteString("event A\n")
-	h.sm.Deliver(Event{evA, nil})
+	smi.Deliver(Event{evA, nil})
 
 	buf.WriteString("event H\n")
-	h.sm.Deliver(Event{evH, nil})
+	smi.Deliver(Event{evH, nil})
 
 	buf.WriteString("event H\n")
-	h.sm.Deliver(Event{evH, nil})
+	smi.Deliver(Event{evH, nil})
 
 	want := `enter s0
 enter s1
@@ -129,58 +142,73 @@ func BenchmarkHsm(b *testing.B) {
 
 	var buf bytes.Buffer
 
-	makeA := func(txt string) func(Event) {
-		return func(e Event) {
+	makeA := func(txt string) func(Event, *hs) {
+		return func(Event, *hs) {
 			buf.WriteString(txt)
 			buf.WriteByte('\n')
 		}
 	}
 
+	sm := StateMachine[*hs]{}
+
+	s0 := sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial[*hs](), WithLocalDefault[*hs](true))
+	s1 := s0.AddState("s1", WithInitial[*hs](), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
+	s11 := s1.AddState("s11", WithInitial[*hs](), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
+	s2 := s0.AddState("s2", WithEntry(makeA("enter s2")), WithExit(makeA("exit s2")))
+	s21 := s2.AddState("s21", WithInitial[*hs](), WithEntry(makeA("enter s21")), WithExit(makeA("exit s21")))
+	s211 := s21.AddState("s211", WithInitial[*hs](), WithEntry(makeA("enter s211")), WithExit(makeA("exit s211")))
+
+	s0.AddTransition(evE, s211)
+
+	s1.AddTransition(evD, s0)
+	s1.AddTransition(evA, s1)
+	s1.AddTransition(evC, s2)
+
+	s11.AddTransition(
+		evH,
+		s11,
+		WithInternal[*hs](),
+		WithGuard(func(event Event, h *hs) bool { return h.isFoo(event) }),
+	)
+	s11.AddTransition(evG, s211)
+
+	s2.AddTransition(evC, s1)
+	s2.AddTransition(evF, s11)
+
+	s21.AddTransition(
+		evH,
+		s21,
+		WithGuard(func(event Event, h *hs) bool { return h.isNotFoo(event) }),
+		WithAction(func(event Event, h *hs) { h.setFoo(event) }),
+	)
+
+	sm.Finalize()
+
 	for i := 0; i < b.N; i++ {
 
 		buf.Reset()
-
 		h := hs{}
 
-		s0 := h.sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial(), WithLocalDefault(true))
-		s1 := s0.AddState("s1", WithInitial(), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
-		s11 := s1.AddState("s11", WithInitial(), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
-		s2 := s0.AddState("s2", WithEntry(makeA("enter s2")), WithExit(makeA("exit s2")))
-		s21 := s2.AddState("s21", WithInitial(), WithEntry(makeA("enter s21")), WithExit(makeA("exit s21")))
-		s211 := s21.AddState("s211", WithInitial(), WithEntry(makeA("enter s211")), WithExit(makeA("exit s211")))
-
-		s0.AddTransition(evE, s211)
-
-		s1.AddTransition(evD, s0)
-		s1.AddTransition(evA, s1)
-		s1.AddTransition(evC, s2)
-
-		s11.AddTransition(evH, s11, WithInternal(), WithGuard(h.isFoo), WithAction(h.unsetFoo))
-		s11.AddTransition(evG, s211)
-
-		s2.AddTransition(evC, s1)
-		s2.AddTransition(evF, s11)
-
-		s21.AddTransition(evH, s21, WithGuard(h.isNotFoo), WithAction(h.setFoo))
-
-		h.sm.Initialize()
+		smi := StateMachineInstance[*hs]{SM: &sm, E: &h}
+		smi.Initialize()
 
 		buf.WriteString("event A\n")
-		h.sm.Deliver(Event{evA, nil})
+		smi.Deliver(Event{evA, nil})
 
 		buf.WriteString("event E\n")
-		h.sm.Deliver(Event{evE, nil})
+		smi.Deliver(Event{evE, nil})
 
 		buf.WriteString("event E\n")
-		h.sm.Deliver(Event{evE, nil})
+		smi.Deliver(Event{evE, nil})
 
 		buf.WriteString("event A\n")
-		h.sm.Deliver(Event{evA, nil})
+		smi.Deliver(Event{evA, nil})
 
 		buf.WriteString("event H\n")
-		h.sm.Deliver(Event{evH, nil})
+		smi.Deliver(Event{evH, nil})
 
 		buf.WriteString("event H\n")
-		h.sm.Deliver(Event{evH, nil})
+		smi.Deliver(Event{evH, nil})
+
 	}
 }
