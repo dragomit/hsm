@@ -138,9 +138,16 @@ event H
 
 }
 
+type falseBuf struct{}
+
+func (f falseBuf) WriteString(s string) {}
+func (f falseBuf) WriteByte(b byte)     {}
+func (f falseBuf) Reset()               {}
+
 func BenchmarkHsm(b *testing.B) {
 
-	var buf bytes.Buffer
+	//var buf bytes.Buffer
+	var buf falseBuf
 
 	makeA := func(txt string) func(Event, *hs) {
 		return func(Event, *hs) {
