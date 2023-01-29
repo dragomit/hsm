@@ -49,14 +49,16 @@ func TestHsm(t *testing.T) {
 	}
 
 	h := hs{}
-	sm := StateMachine[*hs]{}
+	sm := StateMachine[*hs]{local: true}
 
-	s0 := sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial[*hs](), WithLocalDefault[*hs](true))
-	s1 := s0.AddState("s1", WithInitial[*hs](), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
-	s11 := s1.AddState("s11", WithInitial[*hs](), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
-	s2 := s0.AddState("s2", WithEntry(makeA("enter s2")), WithExit(makeA("exit s2")))
-	s21 := s2.AddState("s21", WithInitial[*hs](), WithEntry(makeA("enter s21")), WithExit(makeA("exit s21")))
-	s211 := s21.AddState("s211", WithInitial[*hs](), WithEntry(makeA("enter s211")), WithExit(makeA("exit s211")))
+	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Add()
+
+	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Add()
+
+	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Add()
+	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Add()
+	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Add()
+	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Add()
 
 	s0.AddTransition(evE, s211)
 
@@ -64,23 +66,16 @@ func TestHsm(t *testing.T) {
 	s1.AddTransition(evA, s1)
 	s1.AddTransition(evC, s2)
 
-	s11.AddTransition(
-		evH,
-		s11,
-		WithInternal[*hs](),
-		WithGuard(func(event Event, h *hs) bool { return h.isFoo(event) }),
-	)
+	s11.Transition(evH, s11).Internal().Guard(func(event Event, h *hs) bool { return h.isFoo(event) }).Add()
 	s11.AddTransition(evG, s211)
 
 	s2.AddTransition(evC, s1)
 	s2.AddTransition(evF, s11)
 
-	s21.AddTransition(
-		evH,
-		s21,
-		WithGuard(func(event Event, h *hs) bool { return h.isNotFoo(event) }),
-		WithAction(func(event Event, h *hs) { h.setFoo(event) }),
-	)
+	s21.Transition(evH, s21).
+		Guard(func(event Event, h *hs) bool { return h.isNotFoo(event) }).
+		Action(func(event Event, h *hs) { h.setFoo(event) }).
+		Add()
 
 	sm.Finalize()
 
@@ -156,14 +151,16 @@ func BenchmarkHsm(b *testing.B) {
 		}
 	}
 
-	sm := StateMachine[*hs]{}
+	sm := StateMachine[*hs]{local: true}
 
-	s0 := sm.AddState("s0", WithEntry(makeA("enter s0")), WithExit(makeA("exit S0")), WithInitial[*hs](), WithLocalDefault[*hs](true))
-	s1 := s0.AddState("s1", WithInitial[*hs](), WithEntry(makeA("enter s1")), WithExit(makeA("exit s1")))
-	s11 := s1.AddState("s11", WithInitial[*hs](), WithEntry(makeA("enter s11")), WithExit(makeA("exit s11")))
-	s2 := s0.AddState("s2", WithEntry(makeA("enter s2")), WithExit(makeA("exit s2")))
-	s21 := s2.AddState("s21", WithInitial[*hs](), WithEntry(makeA("enter s21")), WithExit(makeA("exit s21")))
-	s211 := s21.AddState("s211", WithInitial[*hs](), WithEntry(makeA("enter s211")), WithExit(makeA("exit s211")))
+	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Add()
+
+	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Add()
+
+	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Add()
+	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Add()
+	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Add()
+	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Add()
 
 	s0.AddTransition(evE, s211)
 
@@ -171,23 +168,16 @@ func BenchmarkHsm(b *testing.B) {
 	s1.AddTransition(evA, s1)
 	s1.AddTransition(evC, s2)
 
-	s11.AddTransition(
-		evH,
-		s11,
-		WithInternal[*hs](),
-		WithGuard(func(event Event, h *hs) bool { return h.isFoo(event) }),
-	)
+	s11.Transition(evH, s11).Internal().Guard(func(event Event, h *hs) bool { return h.isFoo(event) }).Add()
 	s11.AddTransition(evG, s211)
 
 	s2.AddTransition(evC, s1)
 	s2.AddTransition(evF, s11)
 
-	s21.AddTransition(
-		evH,
-		s21,
-		WithGuard(func(event Event, h *hs) bool { return h.isNotFoo(event) }),
-		WithAction(func(event Event, h *hs) { h.setFoo(event) }),
-	)
+	s21.Transition(evH, s21).
+		Guard(func(event Event, h *hs) bool { return h.isNotFoo(event) }).
+		Action(func(event Event, h *hs) { h.setFoo(event) }).
+		Add()
 
 	sm.Finalize()
 

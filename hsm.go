@@ -6,13 +6,51 @@ type State[estate any] struct {
 	children    []*State[estate]
 	initial     *State[estate] // initial child state
 	validated   bool
-	local       bool // whether to use local transitions by default
 	entry, exit func(Event, estate)
 	transitions []*transition[estate]
+	sm          *StateMachine[estate]
+}
+
+type StateBuilder[estate any] struct {
+	parent  *State[estate]
+	name    string
+	options []stateOption[estate]
+}
+
+func (sb *StateBuilder[estate]) Entry(f func(Event, estate)) *StateBuilder[estate] {
+	sb.options = append(sb.options, func(s *State[estate]) { s.entry = f })
+	return sb
+}
+
+func (sb *StateBuilder[estate]) Exit(f func(Event, estate)) *StateBuilder[estate] {
+	sb.options = append(sb.options, func(s *State[estate]) { s.exit = f })
+	return sb
+}
+
+func (sb *StateBuilder[estate]) Initial() *StateBuilder[estate] {
+	opt := func(s *State[estate]) {
+		p := s.parent
+		if p.initial != nil && p.initial != s {
+			panic("parent state " + p.name + " already has initial sub-state " + p.initial.name)
+		}
+		p.initial = s
+	}
+	sb.options = append(sb.options, opt)
+	return sb
+}
+
+func (sb *StateBuilder[estate]) Add() *State[estate] {
+	ss := State[estate]{parent: sb.parent, name: sb.name, sm: sb.parent.sm}
+	for _, opt := range sb.options {
+		opt(&ss)
+	}
+	sb.parent.children = append(sb.parent.children, &ss)
+	return &ss
 }
 
 type StateMachine[estate any] struct {
-	top State[estate]
+	top   State[estate]
+	local bool // default for whether transitions should be local
 }
 
 type StateMachineInstance[estate any] struct {
@@ -27,7 +65,6 @@ type Event struct {
 }
 
 type transition[estate any] struct {
-	name     string
 	internal bool
 	local    bool
 	eventId  int
@@ -40,85 +77,69 @@ func (s *State[estate]) isLeaf() bool {
 	return len(s.children) == 0
 }
 
-type StateOption[estate any] func(s *State[estate])
+type stateOption[estate any] func(s *State[estate])
 
-func WithEntry[estate any](f func(Event, estate)) StateOption[estate] {
-	return func(s *State[estate]) { s.entry = f }
+type transitionOption[estate any] func(s *State[estate], t *transition[estate])
+
+type TransitionBuilder[estate any] struct {
+	src     *State[estate]
+	t       *transition[estate]
+	options []transitionOption[estate]
 }
 
-func WithExit[estate any](f func(Event, estate)) StateOption[estate] {
-	return func(s *State[estate]) { s.exit = f }
+func (tb *TransitionBuilder[estate]) Guard(f func(Event, estate) bool) *TransitionBuilder[estate] {
+	tb.options = append(tb.options, func(s *State[estate], t *transition[estate]) { t.guard = f })
+	return tb
 }
 
-func WithInitial[estate any]() StateOption[estate] {
-	return func(s *State[estate]) {
-		p := s.parent
-		if p.initial != nil && p.initial != s {
-			panic("parent state " + p.name + " already has initial sub-state " + p.initial.name)
-		}
-		p.initial = s
-	}
+func (tb *TransitionBuilder[estate]) Action(f func(Event, estate)) *TransitionBuilder[estate] {
+	tb.options = append(tb.options, func(s *State[estate], t *transition[estate]) { t.action = f })
+	return tb
 }
 
-func WithLocalDefault[estate any](b bool) StateOption[estate] {
-	return func(s *State[estate]) { s.local = b }
+func (tb *TransitionBuilder[estate]) Internal() *TransitionBuilder[estate] {
+	tb.options = append(tb.options, func(s *State[estate], t *transition[estate]) { t.internal = true })
+	return tb
 }
 
-type TransitionOption[estate any] func(s *State[estate], t *transition[estate])
-
-func WithTName[estate any](name string) TransitionOption[estate] {
-	return func(s *State[estate], t *transition[estate]) { t.name = name }
-}
-
-func WithGuard[estate any](f func(Event, estate) bool) TransitionOption[estate] {
-	return func(s *State[estate], t *transition[estate]) { t.guard = f }
-}
-
-func WithAction[estate any](f func(Event, estate)) TransitionOption[estate] {
-	return func(s *State[estate], t *transition[estate]) { t.action = f }
-}
-
-func WithInternal[estate any]() TransitionOption[estate] {
-	return func(s *State[estate], t *transition[estate]) { t.internal = true }
-}
-
-func WithLocal[estate any]() TransitionOption[estate] {
-	return func(s *State[estate], t *transition[estate]) {
+func (tb *TransitionBuilder[estate]) Local(b bool) *TransitionBuilder[estate] {
+	opt := func(s *State[estate], t *transition[estate]) {
 		if parent := getParent(s, t.target); parent == nil {
 			panic("No point in specifying local transition " + s.name + " -> " + t.target.name)
 		}
-		t.local = true
+		t.local = b
 	}
+	tb.options = append(tb.options, opt)
+	return tb
 }
 
-func (s *State[estate]) AddState(name string, opts ...StateOption[estate]) *State[estate] {
-	ss := State[estate]{parent: s, name: name, local: s.local}
-	for _, opt := range opts {
-		opt(&ss)
-	}
-	s.children = append(s.children, &ss)
-	return &ss
-}
-
-func (s *State[estate]) AddTransition(eventId int, target *State[estate], opts ...TransitionOption[estate]) {
-	t := transition[estate]{
-		eventId: eventId,
-		target:  target,
-	}
-	if s.local || target.local {
-		// One of the two states has enabled local transitions.
-		// This is applicable to this transition only if one of these states is contained
-		// (directly or transitively) in the other one.
-		if parent := getParent(s, target); parent != nil {
+func (tb *TransitionBuilder[estate]) Add() {
+	if tb.src.sm.local {
+		// State machine defaults to local transitions. This is applicable to this transition
+		// only if one of these states is contained (directly or transitively) in the other one.
+		if parent := getParent(tb.src, tb.t.target); parent != nil {
 			// this is a transition where local vs external can make a difference
 			// use default from the parent state
-			t.local = parent.local
+			tb.t.local = true
 		}
 	}
-	s.transitions = append(s.transitions, &t)
-	for _, opt := range opts {
-		opt(s, &t)
+	tb.src.transitions = append(tb.src.transitions, tb.t)
+	for _, opt := range tb.options {
+		opt(tb.src, tb.t)
 	}
+}
+
+func (s *State[estate]) State(name string) *StateBuilder[estate] {
+	return &StateBuilder[estate]{parent: s, name: name}
+}
+
+func (s *State[estate]) Transition(eventId int, target *State[estate]) *TransitionBuilder[estate] {
+	t := transition[estate]{target: target, eventId: eventId}
+	return &TransitionBuilder[estate]{src: s, t: &t}
+}
+
+func (s *State[estate]) AddTransition(eventId int, target *State[estate]) {
+	s.Transition(eventId, target).Add()
 }
 
 // validate checks that if state is entered, a unique path exists through initial transitions
@@ -133,8 +154,9 @@ func (s *State[estate]) validate() {
 	}
 }
 
-func (sm *StateMachine[estate]) AddState(name string, opts ...StateOption[estate]) *State[estate] {
-	return sm.top.AddState(name, opts...)
+func (sm *StateMachine[estate]) State(name string) *StateBuilder[estate] {
+	sm.top.sm = sm
+	return sm.top.State(name)
 }
 
 func (sm *StateMachine[estate]) Finalize() {
