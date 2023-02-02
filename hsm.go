@@ -78,7 +78,7 @@ type StateMachine[E any] struct {
 // StateMachineInstance receives events and goes through state transitions,
 // executing actions along the way.
 // Each StateMachineInstance should have its own,
-// independent external state,
+// independent extended state,
 // whose type is parameterized by E.
 type StateMachineInstance[E any] struct {
 	SM      *StateMachine[E]
@@ -123,22 +123,41 @@ type TransitionBuilder[E any] struct {
 	options []transitionOption[E]
 }
 
-// Guard
+// Guard specifies the guard condition - a function that must return true
+// for the transition to take place.
 func (tb *TransitionBuilder[E]) Guard(f func(Event, E) bool) *TransitionBuilder[E] {
 	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.guard = f })
 	return tb
 }
 
+// Action specifies the transition action function.
+// The transition action is invoked after any applicable state exit functions,
+// and before any applicable state entry functions.
 func (tb *TransitionBuilder[E]) Action(f func(Event, E)) *TransitionBuilder[E] {
 	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.action = f })
 	return tb
 }
 
+// Internal specifies that transition should be treated as an internal transition,
+// as opposed to the default external transition.
+// This can only be specified for self-transitions - i.e. target state must be the same as the source state,
+// or other the method will panic.
+// Internal transitions differ from external transitions in that no entry or exit functions
+// are invoked.
+// Internal transitions specified in composite-states will be inherited by all the sub-states,
+// unless explicitly overriden.
 func (tb *TransitionBuilder[E]) Internal() *TransitionBuilder[E] {
 	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.internal = true })
 	return tb
 }
 
+// Local specifies whether the transition should be treated as local or external,
+// overriding the default for the state machine.
+// This can only be specified for transitions between composite state and one of its
+// (direct or transitive) sub-states,
+// because the concept of local transitions does not make sense otherwise.
+// Local transitions differ from the external ones in that they do not feature
+// exit and re-entry from the parent (composite) state.
 func (tb *TransitionBuilder[E]) Local(b bool) *TransitionBuilder[E] {
 	opt := func(s *State[E], t *transition[E]) {
 		if parent := getParent(s, t.target); parent == nil {
