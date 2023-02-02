@@ -51,14 +51,14 @@ func TestHsm(t *testing.T) {
 	h := hs{}
 	sm := StateMachine[*hs]{local: true}
 
-	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Add()
+	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Build()
 
-	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Add()
+	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Build()
 
-	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Add()
-	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Add()
-	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Add()
-	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Add()
+	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Build()
+	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Build()
+	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Build()
+	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Build()
 
 	s0.AddTransition(evE, s211)
 
@@ -79,16 +79,16 @@ func TestHsm(t *testing.T) {
 
 	sm.Finalize()
 
-	smi := StateMachineInstance[*hs]{SM: &sm, E: &h}
+	smi := StateMachineInstance[*hs]{SM: &sm, Ext: &h}
 	smi.Initialize()
 
 	buf.WriteString("event A\n")
 	smi.Deliver(Event{evA, nil})
 
-	buf.WriteString("event E\n")
+	buf.WriteString("event Ext\n")
 	smi.Deliver(Event{evE, nil})
 
-	buf.WriteString("event E\n")
+	buf.WriteString("event Ext\n")
 	smi.Deliver(Event{evE, nil})
 
 	buf.WriteString("event A\n")
@@ -108,13 +108,13 @@ exit s11
 exit s1
 enter s1
 enter s11
-event E
+event Ext
 exit s11
 exit s1
 enter s2
 enter s21
 enter s211
-event E
+event Ext
 exit s211
 exit s21
 exit s2
@@ -153,14 +153,14 @@ func BenchmarkHsm(b *testing.B) {
 
 	sm := StateMachine[*hs]{local: true}
 
-	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Add()
+	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Build()
 
-	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Add()
+	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Build()
 
-	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Add()
-	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Add()
-	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Add()
-	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Add()
+	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Build()
+	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Build()
+	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Build()
+	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Build()
 
 	s0.AddTransition(evE, s211)
 
@@ -186,16 +186,16 @@ func BenchmarkHsm(b *testing.B) {
 		buf.Reset()
 		h := hs{}
 
-		smi := StateMachineInstance[*hs]{SM: &sm, E: &h}
+		smi := StateMachineInstance[*hs]{SM: &sm, Ext: &h}
 		smi.Initialize()
 
 		buf.WriteString("event A\n")
 		smi.Deliver(Event{evA, nil})
 
-		buf.WriteString("event E\n")
+		buf.WriteString("event Ext\n")
 		smi.Deliver(Event{evE, nil})
 
-		buf.WriteString("event E\n")
+		buf.WriteString("event Ext\n")
 		smi.Deliver(Event{evE, nil})
 
 		buf.WriteString("event A\n")

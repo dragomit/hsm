@@ -1,4 +1,4 @@
-module hsm
+module github.com/dragomit/hsm
 
 go 1.19
 
