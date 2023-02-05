@@ -2,13 +2,13 @@ package hsm
 
 // State is a leaf or composite state in a state machine.
 // To create a top-level state in a state machine,
-// use [hsm.StateMachine.State] method but not [StateMachine] and certainly not [State.IsLeaf] method.
+// use [hsm.StateMachine.State] method.
 // To create a sub-state of a composite state,
-// use [State.SubState] method.
+// use [hsm.State.SubState] method.
 // State (and its containing StateMachine) are parameterized by E - the extended state type.
 // E is usually a pointer to a struct containing various quantitative aspects of the object's state,
-// as opposed to the qualitative aspects captured through the state machine's states.
-// If you don't need extended state, use struct{}.
+// as opposed to the qualitative aspects captured through the state machine's discrete states.
+// If you don't need an extended state, use struct{} for E.
 type State[E any] struct {
 	name        string
 	parent      *State[E]
@@ -169,7 +169,8 @@ func (tb *TransitionBuilder[E]) Local(b bool) *TransitionBuilder[E] {
 	return tb
 }
 
-func (tb *TransitionBuilder[E]) Add() {
+// Build completes building the transition
+func (tb *TransitionBuilder[E]) Build() {
 	if tb.src.sm.local {
 		// State machine defaults to local transitions. This is applicable to this transition
 		// only if one of these states is contained (directly or transitively) in the other one.
@@ -185,17 +186,23 @@ func (tb *TransitionBuilder[E]) Add() {
 	}
 }
 
+// State creates and returns a builder for building a nested sub-state.
 func (s *State[E]) State(name string) *StateBuilder[E] {
 	return &StateBuilder[E]{parent: s, name: name}
 }
 
+// Transition creates and returns a builder for the transition from the current state into a target state.
+// The transition is triggered by event with the given id.
+// The returned builder can be used to further customize the transition,
+// such as providing action, guard condition, and transition type.
 func (s *State[E]) Transition(eventId int, target *State[E]) *TransitionBuilder[E] {
 	t := transition[E]{target: target, eventId: eventId}
 	return &TransitionBuilder[E]{src: s, t: &t}
 }
 
+// AddTransition is a convenience method, equivalent to calling s.Transition(eventId, target).Build().
 func (s *State[E]) AddTransition(eventId int, target *State[E]) {
-	s.Transition(eventId, target).Add()
+	s.Transition(eventId, target).Build()
 }
 
 // validate checks that if state is entered, a unique path exists through initial transitions
@@ -210,11 +217,17 @@ func (s *State[E]) validate() {
 	}
 }
 
+// State starts a builder for a top-level state in a state machine.
+// There must be at least one top-level state in a state machine,
+// and exactly one of those must be marked as initial state.
 func (sm *StateMachine[E]) State(name string) *StateBuilder[E] {
 	sm.top.sm = sm
 	return sm.top.State(name)
 }
 
+// Finalize validates and finalizes the state machine structure.
+// Finalize must be called before any state machine instances are initialized,
+// and state machine structure must not be modified after this method is called.
 func (sm *StateMachine[E]) Finalize() {
 	// must be able to enter root state
 	sm.top.validate()
@@ -232,6 +245,9 @@ func (sm *StateMachine[E]) Finalize() {
 	recurseValidate(&sm.top)
 }
 
+// Initialize initializes this instance.
+// Before this method returns, state machine will enter its initial leaf state,
+// invoking any relevant entry actions.
 func (smi *StateMachineInstance[E]) Initialize() {
 
 	if !smi.SM.top.validated {
@@ -258,6 +274,8 @@ func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transiti
 	return nil, nil
 }
 
+// Deliver an event to the state machine. Any applicable transitions and actions
+// will be completed before this method returns.
 func (smi *StateMachineInstance[E]) Deliver(e Event) {
 	if smi.current == nil {
 		panic("State machine must be initialized before delivering the first event")
@@ -330,6 +348,12 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 		}
 	}
 
+}
+
+// Current returns current (leaf) state.
+// This method should only be invoked after [StateMachineInstance.Deliver] returns
+func (smi *StateMachineInstance[E]) Current() *State[E] {
+	return smi.current
 }
 
 // getParent returns the one of the two states that's (direct or transitive) superstate of the other,
