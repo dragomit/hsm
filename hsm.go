@@ -1,5 +1,13 @@
 package hsm
 
+type History int
+
+const (
+	HistoryNone    History = 0
+	HistoryShallow History = 1
+	HistoryDeep    History = 2
+)
+
 // State is a leaf or composite state in a state machine.
 // To create a top-level state in a state machine,
 // use [hsm.StateMachine.State] method.
@@ -18,6 +26,7 @@ type State[E any] struct {
 	entry, exit func(Event, E)
 	transitions []*transition[E]
 	sm          *StateMachine[E]
+	history     History // types of history transitions into this state
 }
 
 // StateBuilder provides Fluent API for building new [State].
@@ -70,8 +79,9 @@ func (sb *StateBuilder[E]) Build() *State[E] {
 // deliver events to it and drive it through transitions,
 // create [StateMachineInstance] tied to this StateMachine.
 type StateMachine[E any] struct {
-	top   State[E]
-	local bool // default for whether transitions should be local
+	top     State[E]
+	local   bool    // default for whether transitions should be local
+	history History // types of history transitions used
 }
 
 // StateMachineInstance is an instance of a particular StateMachine.
@@ -81,9 +91,11 @@ type StateMachine[E any] struct {
 // independent extended state,
 // whose type is parameterized by E.
 type StateMachineInstance[E any] struct {
-	SM      *StateMachine[E]
-	Ext     E
-	current *State[E]
+	SM             *StateMachine[E]
+	Ext            E
+	current        *State[E]
+	historyShallow map[*State[E]]*State[E]
+	historyDeep    map[*State[E]]*State[E]
 }
 
 // Event instance are delivered to state machine,
@@ -102,6 +114,7 @@ type transition[E any] struct {
 	target   *State[E]
 	guard    func(Event, E) bool
 	action   func(Event, E)
+	history  History
 }
 
 func (s *State[E]) IsLeaf() bool {
@@ -164,6 +177,17 @@ func (tb *TransitionBuilder[E]) Local(b bool) *TransitionBuilder[E] {
 			panic("No point in specifying local transition " + s.name + " -> " + t.target.name)
 		}
 		t.local = b
+	}
+	tb.options = append(tb.options, opt)
+	return tb
+}
+
+// History specifies that transition shall occur into the (shallow or deep) history of the target composite state.
+// In case the system has not yet visited the composite state,
+// the transition will proceed into the composite state's initial sub-state.
+func (tb *TransitionBuilder[E]) History(h History) *TransitionBuilder[E] {
+	opt := func(s *State[E], t *transition[E]) {
+		t.history = h
 	}
 	tb.options = append(tb.options, opt)
 	return tb
@@ -235,6 +259,8 @@ func (sm *StateMachine[E]) Finalize() {
 	var recurseValidate func(*State[E])
 	recurseValidate = func(s *State[E]) {
 		for _, t := range s.transitions {
+			sm.history |= t.history
+			t.target.history |= t.history
 			// must be able to enter any state that's target of a transition
 			t.target.validate()
 		}
@@ -253,6 +279,14 @@ func (smi *StateMachineInstance[E]) Initialize() {
 	if !smi.SM.top.validated {
 		panic("state machine not finalized")
 	}
+
+	if smi.SM.history&HistoryDeep != 0 {
+		smi.historyDeep = make(map[*State[E]]*State[E])
+	}
+	if smi.SM.history&HistoryShallow != 0 {
+		smi.historyShallow = make(map[*State[E]]*State[E])
+	}
+
 	// drill down to the initial leaf state, running entry actions along the way
 	e := Event{EventId: -1, Data: nil} // null event
 	for s := &smi.SM.top; s != nil; s = s.initial {
@@ -325,6 +359,12 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 		if s.exit != nil {
 			s.exit(e, smi.Ext)
 		}
+		if s.parent.history&HistoryShallow != 0 {
+			smi.historyShallow[s.parent] = s
+		}
+		if s.parent.history&HistoryDeep != 0 {
+			smi.historyDeep[s.parent] = smi.current
+		}
 	}
 
 	// execute the transition action
@@ -340,8 +380,35 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 	}
 	smi.current = dst
 
-	// we have entered dst; proceed with initial transitions if dst is composite state
-	for s := dst.initial; s != nil; s = s.initial {
+	// we have entered dst; proceed with initial or history transitions if dst is composite state
+	var s *State[E] = dst.initial
+
+	if t.history == HistoryDeep {
+		if s = smi.historyShallow[dst]; s != nil {
+			// compute path from deep history up to dst
+			dstPath = dstPath[:0]
+			for ; s != dst; s = s.parent {
+				dstPath = append(dstPath, s)
+			}
+			// now walk backwards, entering states
+			for i := len(dstPath) - 1; i >= 0; i-- {
+				if dstPath[i].entry != nil {
+					dstPath[i].entry(e, smi.Ext)
+				}
+			}
+			smi.current = dstPath[0]
+			return
+		}
+		// first transition into this state, no history, use initial transition
+		s = dst.initial
+	} else if t.history == HistoryShallow {
+		s = smi.historyShallow[dst]
+		if s == nil {
+			// first transition into this state, no history, use initial transition
+			s = dst.initial
+		}
+	}
+	for ; s != nil; s = s.initial {
 		smi.current = s
 		if s.entry != nil {
 			s.entry(e, smi.Ext)
