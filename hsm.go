@@ -108,13 +108,15 @@ type Event struct {
 }
 
 type transition[E any] struct {
-	internal bool
-	local    bool
-	eventId  int
-	target   *State[E]
-	guard    func(Event, E) bool
-	action   func(Event, E)
-	history  History
+	internal   bool
+	local      bool
+	eventId    int
+	target     *State[E]
+	guard      func(Event, E) bool
+	guardName  string
+	action     func(Event, E)
+	actionName string
+	history    History
 }
 
 func (s *State[E]) IsLeaf() bool {
@@ -138,16 +140,18 @@ type TransitionBuilder[E any] struct {
 
 // Guard specifies the guard condition - a function that must return true
 // for the transition to take place.
-func (tb *TransitionBuilder[E]) Guard(f func(Event, E) bool) *TransitionBuilder[E] {
-	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.guard = f })
+// Guard name need not be unique, and is only used for state machine diagram generation.
+func (tb *TransitionBuilder[E]) Guard(name string, f func(Event, E) bool) *TransitionBuilder[E] {
+	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.guard, t.guardName = f, name })
 	return tb
 }
 
-// Action specifies the transition action function.
+// Action specifies the transition action name and function.
 // The transition action is invoked after any applicable state exit functions,
 // and before any applicable state entry functions.
-func (tb *TransitionBuilder[E]) Action(f func(Event, E)) *TransitionBuilder[E] {
-	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.action = f })
+// Action name need not be unique, and is only used for state machine diagram generation.
+func (tb *TransitionBuilder[E]) Action(name string, f func(Event, E)) *TransitionBuilder[E] {
+	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.action, t.actionName = f, name })
 	return tb
 }
 
