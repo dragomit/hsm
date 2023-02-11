@@ -274,7 +274,9 @@ func (sm *StateMachine[E]) Finalize() {
 // Initialize initializes this instance.
 // Before this method returns, state machine will enter its initial leaf state,
 // invoking any relevant entry actions.
-func (smi *StateMachineInstance[E]) Initialize() {
+// The event e is passed into the entry actions as the initial event,
+// but is otherwise not delivered to state machine.
+func (smi *StateMachineInstance[E]) Initialize(e Event) {
 
 	if !smi.SM.top.validated {
 		panic("state machine not finalized")
@@ -288,7 +290,6 @@ func (smi *StateMachineInstance[E]) Initialize() {
 	}
 
 	// drill down to the initial leaf state, running entry actions along the way
-	e := Event{EventId: -1, Data: nil} // null event
 	for s := &smi.SM.top; s != nil; s = s.initial {
 		if s.entry != nil {
 			s.entry(e, smi.Ext)

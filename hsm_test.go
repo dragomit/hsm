@@ -15,6 +15,7 @@ const (
 	evF
 	evG
 	evH
+	evInit
 )
 
 type hs struct {
@@ -80,7 +81,7 @@ func TestHsm(t *testing.T) {
 	sm.Finalize()
 
 	smi := StateMachineInstance[*hs]{SM: &sm, Ext: &h}
-	smi.Initialize()
+	smi.Initialize(Event{evInit, nil})
 
 	buf.WriteString("event A\n")
 	smi.Deliver(Event{evA, nil})
@@ -187,7 +188,7 @@ func BenchmarkHsm(b *testing.B) {
 		h := hs{}
 
 		smi := StateMachineInstance[*hs]{SM: &sm, Ext: &h}
-		smi.Initialize()
+		smi.Initialize(Event{evInit, nil})
 
 		buf.WriteString("event A\n")
 		smi.Deliver(Event{evA, nil})
