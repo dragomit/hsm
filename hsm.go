@@ -90,9 +90,10 @@ func (sb *StateBuilder[E]) Build() *State[E] {
 // deliver events to it and drive it through transitions,
 // create [StateMachineInstance] tied to this StateMachine.
 type StateMachine[E any] struct {
-	top     State[E]
-	local   bool    // default for whether transitions should be local
-	history History // types of history transitions used
+	top      State[E]
+	terminal State[E]
+	local    bool    // default for whether transitions should be local
+	history  History // types of history transitions used
 }
 
 // StateMachineInstance is an instance of a particular StateMachine.
@@ -107,6 +108,7 @@ type StateMachineInstance[E any] struct {
 	current        *State[E]
 	historyShallow map[*State[E]]*State[E]
 	historyDeep    map[*State[E]]*State[E]
+	initialized    bool
 }
 
 // Event instance are delivered to state machine,
@@ -138,6 +140,7 @@ func (t *transition[E]) String() string {
 		bld.WriteByte(']')
 	}
 	if t.action != nil {
+		bld.WriteString(" / ")
 		bld.WriteString(t.actionName)
 	}
 	return bld.String()
@@ -247,7 +250,11 @@ func (s *State[E]) State(name string) *StateBuilder[E] {
 // The transition is triggered by event with the given id.
 // The returned builder can be used to further customize the transition,
 // such as providing action, guard condition, and transition type.
+// To indicate state machine termination, provide nil for target state.
 func (s *State[E]) Transition(eventId int, target *State[E]) *TransitionBuilder[E] {
+	if target == nil {
+		target = &s.sm.terminal
+	}
 	t := transition[E]{target: target, eventId: eventId}
 	return &TransitionBuilder[E]{src: s, t: &t}
 }
@@ -299,15 +306,18 @@ func (sm *StateMachine[E]) Finalize() {
 	recurseValidate(&sm.top)
 }
 
-// Diagram builds a PlantUML diagram of a finalized state machine.
+// DiagramPUML builds a PlantUML diagram of a finalized state machine.
 // evNameMapper provides mapping of event ids to event names.
-func (sm *StateMachine[E]) Diagram(evNameMapper func(int) string) string {
+func (sm *StateMachine[E]) DiagramPUML(evNameMapper func(int) string) string {
 	if !sm.top.validated {
 		panic("state machine not finalized")
 	}
-	var bld, bldTrans strings.Builder
 
-	var dump func(indent int, s *State[E])
+	var (
+		bld, bldTrans strings.Builder
+		dump          func(indent int, s *State[E])
+	)
+
 	dump = func(indent int, s *State[E]) {
 		prefix := strings.Repeat("   ", indent)
 
@@ -346,8 +356,11 @@ func (sm *StateMachine[E]) Diagram(evNameMapper func(int) string) string {
 	}
 
 	bld.WriteString("@startuml\n\n")
+	sm.terminal.alias = "[*]"
 	for _, s := range sm.top.children {
-		dump(0, s)
+		if s != &sm.terminal {
+			dump(0, s)
+		}
 	}
 	bld.WriteString(bldTrans.String())
 	bld.WriteString("\n@enduml\n")
@@ -379,6 +392,7 @@ func (smi *StateMachineInstance[E]) Initialize(e Event) {
 		}
 		smi.current = s
 	}
+	smi.initialized = true
 }
 
 func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transition[E]) {
@@ -395,8 +409,11 @@ func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transiti
 // Deliver an event to the state machine. Any applicable transitions and actions
 // will be completed before this method returns.
 func (smi *StateMachineInstance[E]) Deliver(e Event) {
-	if smi.current == nil {
+	if !smi.initialized {
 		panic("State machine must be initialized before delivering the first event")
+	}
+	if smi.current == nil {
+		return // all events are ignored in the terminal state
 	}
 	src, t := smi.getTransition(e)
 	if t == nil {
@@ -456,15 +473,20 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 		t.action(e, smi.Ext)
 	}
 
+	if dst == &smi.SM.terminal {
+		smi.current = nil // state machine has terminated
+		return
+	}
+
 	// move down from just below LCS to dst, entering states
 	for j := j; j >= 0; j-- {
 		if dstPath[j].entry != nil {
 			dstPath[j].entry(e, smi.Ext)
 		}
 	}
-	smi.current = dst
 
 	// we have entered dst; proceed with initial or history transitions if dst is composite state
+	smi.current = dst
 	var s *State[E] = dst.initial
 
 	if t.history == HistoryDeep {
@@ -498,11 +520,10 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 			s.entry(e, smi.Ext)
 		}
 	}
-
 }
 
-// Current returns current (leaf) state.
-// This method should only be invoked after [StateMachineInstance.Deliver] returns
+// Current returns current (leaf) state, or nil if state machine has terminated.
+// This method should only be invoked between [StateMachineInstance.Deliver] invocations.
 func (smi *StateMachineInstance[E]) Current() *State[E] {
 	return smi.current
 }

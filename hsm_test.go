@@ -80,7 +80,7 @@ func TestHsm(t *testing.T) {
 		Build()
 
 	sm.Finalize()
-	fmt.Println(sm.Diagram(func(i int) string {
+	fmt.Println(sm.DiagramPUML(func(i int) string {
 		return string([]byte{'A' + byte(i)})
 	}))
 

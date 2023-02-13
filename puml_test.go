@@ -14,6 +14,7 @@ const (
 	evFailed
 	evResume
 	evDeepResume
+	evAborted
 )
 
 func TestPumlExample1(t *testing.T) {
@@ -37,8 +38,13 @@ func TestPumlExample1(t *testing.T) {
 	state1.AddTransition(evSucceeded, state2)
 	state3.AddTransition(evFailed, state3)
 
+	state1.AddTransition(evAborted, nil)
+	state2.AddTransition(evAborted, nil)
+	state3.AddTransition(evAborted, nil)
+	state3.Transition(evSucceeded, nil).Action("Save Result", func(hsm.Event, struct{}) {}).Build()
+
 	sm.Finalize()
-	fmt.Println(sm.Diagram(func(i int) string {
+	fmt.Println(sm.DiagramPUML(func(i int) string {
 		return []string{
 			"New data",
 			"Enough data",
@@ -47,6 +53,7 @@ func TestPumlExample1(t *testing.T) {
 			"Failed",
 			"Resume",
 			"Deep resume",
+			"Aborted",
 		}[i]
 	}))
 
