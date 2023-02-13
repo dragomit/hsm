@@ -1,5 +1,10 @@
 package hsm
 
+import (
+	"fmt"
+	"strings"
+)
+
 type History int
 
 const (
@@ -19,6 +24,7 @@ const (
 // If you don't need an extended state, use struct{} for E.
 type State[E any] struct {
 	name        string
+	alias       string
 	parent      *State[E]
 	children    []*State[E]
 	initial     *State[E] // initial child state
@@ -65,7 +71,12 @@ func (sb *StateBuilder[E]) Initial() *StateBuilder[E] {
 
 // Build builds and returns the new state.
 func (sb *StateBuilder[E]) Build() *State[E] {
-	ss := State[E]{parent: sb.parent, name: sb.name, sm: sb.parent.sm}
+	ss := State[E]{
+		parent: sb.parent,
+		name:   sb.name,
+		alias:  strings.ReplaceAll(sb.name, " ", "_"),
+		sm:     sb.parent.sm,
+	}
 	for _, opt := range sb.options {
 		opt(&ss)
 	}
@@ -117,6 +128,19 @@ type transition[E any] struct {
 	action     func(Event, E)
 	actionName string
 	history    History
+}
+
+func (t *transition[E]) String() string {
+	var bld strings.Builder
+	if t.guard != nil {
+		bld.WriteByte('[')
+		bld.WriteString(t.guardName)
+		bld.WriteByte(']')
+	}
+	if t.action != nil {
+		bld.WriteString(t.actionName)
+	}
+	return bld.String()
 }
 
 func (s *State[E]) IsLeaf() bool {
@@ -273,6 +297,61 @@ func (sm *StateMachine[E]) Finalize() {
 		}
 	}
 	recurseValidate(&sm.top)
+}
+
+// Diagram builds a PlantUML diagram of a finalized state machine.
+// evNameMapper provides mapping of event ids to event names.
+func (sm *StateMachine[E]) Diagram(evNameMapper func(int) string) string {
+	if !sm.top.validated {
+		panic("state machine not finalized")
+	}
+	var bld, bldTrans strings.Builder
+
+	var dump func(indent int, s *State[E])
+	dump = func(indent int, s *State[E]) {
+		prefix := strings.Repeat("   ", indent)
+
+		if s.name == s.alias {
+			fmt.Fprintf(&bld, "%sstate %s", prefix, s.alias)
+		} else {
+			fmt.Fprintf(&bld, "%sstate \"%s\" as %s", prefix, s.name, s.alias)
+		}
+		if !s.IsLeaf() {
+			bld.WriteString(" {\n")
+			for _, child := range s.children {
+				dump(indent+1, child)
+			}
+			bld.WriteString(prefix)
+			bld.WriteString("}")
+		}
+		bld.WriteString("\n")
+		if s.parent.initial == s {
+			fmt.Fprintf(&bld, "%s[*] --> %s\n", prefix, s.alias)
+		}
+		for _, t := range s.transitions {
+			var hist string
+			if t.history == HistoryShallow {
+				hist = "[H]"
+			} else if t.history == HistoryDeep {
+				hist = "[H*]"
+			}
+			if t.internal {
+				fmt.Fprintf(&bld, "%s%s : %s%s\n", prefix, s.alias, evNameMapper(t.eventId), t)
+			} else if t.local {
+				fmt.Fprintf(&bld, "%s%s --> %s%s : %s%s\n", prefix, s.alias, t.target.alias, hist, evNameMapper(t.eventId), t)
+			} else {
+				fmt.Fprintf(&bldTrans, "%s --> %s%s : %s%s\n", s.alias, t.target.alias, hist, evNameMapper(t.eventId), t)
+			}
+		}
+	}
+
+	bld.WriteString("@startuml\n\n")
+	for _, s := range sm.top.children {
+		dump(0, s)
+	}
+	bld.WriteString(bldTrans.String())
+	bld.WriteString("\n@enduml\n")
+	return bld.String()
 }
 
 // Initialize initializes this instance.

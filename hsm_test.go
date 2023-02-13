@@ -2,6 +2,7 @@ package hsm
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -79,6 +80,9 @@ func TestHsm(t *testing.T) {
 		Build()
 
 	sm.Finalize()
+	fmt.Println(sm.Diagram(func(i int) string {
+		return string([]byte{'A' + byte(i)})
+	}))
 
 	smi := StateMachineInstance[*hs]{SM: &sm, Ext: &h}
 	smi.Initialize(Event{evInit, nil})
