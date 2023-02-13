@@ -240,12 +240,10 @@ func (tb *TransitionBuilder[E]) History(h History) *TransitionBuilder[E] {
 
 // Build completes building the transition
 func (tb *TransitionBuilder[E]) Build() {
-	if tb.src.sm.local {
+	if tb.src.sm.LocalDefault {
 		// State machine defaults to local transitions. This is applicable to this transition
 		// only if one of these states is contained (directly or transitively) in the other one.
 		if parent := getParent(tb.src, tb.t.target); parent != nil {
-			// this is a transition where local vs external can make a difference
-			// use default from the parent state
 			tb.t.local = true
 		}
 	}

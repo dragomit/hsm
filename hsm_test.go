@@ -51,7 +51,7 @@ func TestHsm(t *testing.T) {
 	}
 
 	h := hs{}
-	sm := StateMachine[*hs]{local: true}
+	sm := StateMachine[*hs]{LocalDefault: true}
 
 	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Build()
 
@@ -156,7 +156,7 @@ func BenchmarkHsm(b *testing.B) {
 		}
 	}
 
-	sm := StateMachine[*hs]{local: true}
+	sm := StateMachine[*hs]{LocalDefault: true}
 
 	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Build()
 

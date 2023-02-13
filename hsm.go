@@ -19,10 +19,12 @@ const (
 // StateMachine is only about the structure - to create an instance,
 // deliver events to it and drive it through transitions,
 // create [StateMachineInstance] tied to this StateMachine.
+// Zero value of StateMachine is ready for use.
+// Do not copy a non-zero StateMachine.
 type StateMachine[E any] struct {
 	top                State[E]
 	terminal           State[E]
-	local              bool    // default for whether transitions should be local
+	LocalDefault       bool    // default for whether transitions should be local
 	history            History // types of history transitions used
 	stateBuilders      []*StateBuilder[E]
 	transitionBuilders []*TransitionBuilder[E]
@@ -34,6 +36,9 @@ type StateMachine[E any] struct {
 // Each StateMachineInstance should have its own,
 // independent extended state,
 // whose type is parameterized by E.
+// Before using an instance,
+// you must set the SM field to assign the instance to a finalized StateMachine.
+// Prior to delivering any events to the instance, you must Initialize() it.
 type StateMachineInstance[E any] struct {
 	SM             *StateMachine[E]
 	Ext            E
