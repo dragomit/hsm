@@ -276,7 +276,7 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 	var s *State[E] = dst.initial
 
 	if t.history == HistoryDeep {
-		if s = smi.historyShallow[dst]; s != nil {
+		if s = smi.historyDeep[dst]; s != nil {
 			// compute path from deep history up to dst
 			dstPath = dstPath[:0]
 			for ; s != dst; s = s.parent {

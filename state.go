@@ -131,6 +131,11 @@ func (s *State[E]) State(name string) *StateBuilder[E] {
 	return sb
 }
 
+// Name returns state's name
+func (s *State[E]) Name() string {
+	return s.name
+}
+
 // validate checks that if state is entered, a unique path exists through initial transitions
 // to a leaf state
 func (s *State[E]) validate() {
