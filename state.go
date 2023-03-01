@@ -15,16 +15,17 @@ import (
 // as opposed to the qualitative aspects captured through the state machine's discrete states.
 // If you don't need an extended state, use struct{} for E.
 type State[E any] struct {
-	name        string
-	alias       string
-	parent      *State[E]
-	children    []*State[E]
-	initial     *State[E] // initial child state
-	validated   bool
-	entry, exit func(Event, E)
-	transitions []*transition[E]
-	sm          *StateMachine[E]
-	history     History // types of history transitions into this state
+	name                string
+	alias               string
+	parent              *State[E]
+	children            []*State[E]
+	initial             *State[E] // initial child state
+	validated           bool
+	entry, exit         func(Event, E)
+	entryName, exitName string
+	transitions         []*transition[E]
+	sm                  *StateMachine[E]
+	history             History // types of history transitions into this state
 }
 
 // StateBuilder provides Fluent API for building new [State].
@@ -35,14 +36,14 @@ type StateBuilder[E any] struct {
 }
 
 // Entry sets func f as the entry action for the state being built.
-func (sb *StateBuilder[E]) Entry(f func(Event, E)) *StateBuilder[E] {
-	sb.options = append(sb.options, func(s *State[E]) { s.entry = f })
+func (sb *StateBuilder[E]) Entry(name string, f func(Event, E)) *StateBuilder[E] {
+	sb.options = append(sb.options, func(s *State[E]) { s.entry, s.entryName = f, name })
 	return sb
 }
 
 // Exit sets func f as the exit action for the state being built.
-func (sb *StateBuilder[E]) Exit(f func(Event, E)) *StateBuilder[E] {
-	sb.options = append(sb.options, func(s *State[E]) { s.exit = f })
+func (sb *StateBuilder[E]) Exit(name string, f func(Event, E)) *StateBuilder[E] {
+	sb.options = append(sb.options, func(s *State[E]) { s.exit, s.exitName = f, name })
 	return sb
 }
 

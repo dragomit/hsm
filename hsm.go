@@ -121,6 +121,13 @@ func (sm *StateMachine[E]) DiagramPUML(evNameMapper func(int) string) string {
 			bld.WriteString("}")
 		}
 		bld.WriteString("\n")
+		if s.entry != nil {
+			fmt.Fprintf(&bld, "%s%s : entry / %s\n", prefix, s.alias, s.entryName)
+		}
+		if s.exit != nil {
+			fmt.Fprintf(&bld, "%s%s : exit / %s\n", prefix, s.alias, s.exitName)
+		}
+
 		if s.parent.initial == s {
 			fmt.Fprintf(&bld, "%s[*] --> %s\n", prefix, s.alias)
 		}

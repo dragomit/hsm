@@ -32,10 +32,10 @@ func TestLocalInternalExternal(t *testing.T) {
 	}
 
 	sm := hsm.StateMachine[struct{}]{}
-	s := sm.State("S").Entry(makeA("enter S")).Exit(makeA("exit S")).Initial().Build()
-	s1 := s.State("S1").Entry(makeA("enter S1")).Exit(makeA("exit S1")).Initial().Build()
-	s11 := s1.State("S11").Entry(makeA("enter S11")).Exit(makeA("exit S11")).Initial().Build()
-	s12 := s1.State("S12").Entry(makeA("enter S12")).Exit(makeA("exit S12")).Build()
+	s := sm.State("S").Entry("enter S", makeA("enter S")).Exit("exit S", makeA("exit S")).Initial().Build()
+	s1 := s.State("S1").Entry("enter S1", makeA("enter S1")).Exit("exit S1", makeA("exit S1")).Initial().Build()
+	s11 := s1.State("S11").Entry("enter S11", makeA("enter S11")).Exit("exit S11", makeA("exit S11")).Initial().Build()
+	s12 := s1.State("S12").Entry("enter S12", makeA("enter S12")).Exit("Exit S12", makeA("exit S12")).Build()
 
 	s11.Transition(evA, s).Local(true).Action("A", makeA("action A")).Build()
 	s11.Transition(evB, s).Local(false).Action("B", makeA("action B")).Build()

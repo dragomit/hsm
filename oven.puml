@@ -1,0 +1,25 @@
+@startuml
+
+state "Door Open" as Door_Open
+Door_Open : entry / light_on
+Door_Open : exit / light_off
+state "Door Closed" as Door_Closed {
+   state Heating {
+      state Toasting
+      state Baking
+   }
+   Heating : entry / heating_on
+   Heating : exit / heating_off
+   state Off
+   [*] --> Off
+}
+[*] --> Door_Closed
+Door_Open --> Door_Closed[H*] : close
+Door_Closed --> Door_Open : open
+Door_Closed --> Off : off
+Door_Closed --> Baking : bake
+Door_Closed --> Toasting : toast
+
+@enduml
+
+

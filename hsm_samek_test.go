@@ -57,14 +57,14 @@ func TestHsm(t *testing.T) {
 	h := hs{}
 	sm := StateMachine[*hs]{LocalDefault: true}
 
-	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Build()
+	s0 := sm.State("s0").Entry("enter s0", makeA("enter s0")).Exit("exit s0", makeA("exit S0")).Initial().Build()
 
-	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Build()
+	s1 := s0.State("s1").Initial().Entry("enter s1", makeA("enter s1")).Exit("exit s1", makeA("exit s1")).Build()
 
-	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Build()
-	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Build()
-	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Build()
-	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Build()
+	s11 := s1.State("s11").Initial().Entry("enter s11", makeA("enter s11")).Exit("exit s11", makeA("exit s11")).Build()
+	s2 := s0.State("s2").Entry("enter s2", makeA("enter s2")).Exit("exit s2", makeA("exit s2")).Build()
+	s21 := s2.State("s21").Initial().Entry("enter s21", makeA("enter s21")).Exit("exit s21", makeA("exit s21")).Build()
+	s211 := s21.State("s211").Initial().Entry("enter s211", makeA("enter s211")).Exit("exit s211", makeA("exit s211")).Build()
 
 	s0.AddTransition(evE, s211)
 
@@ -162,14 +162,14 @@ func BenchmarkHsm(b *testing.B) {
 
 	sm := StateMachine[*hs]{LocalDefault: true}
 
-	s0 := sm.State("s0").Entry(makeA("enter s0")).Exit(makeA("exit S0")).Initial().Build()
+	s0 := sm.State("s0").Entry("enter s0", makeA("enter s0")).Exit("exit s0", makeA("exit S0")).Initial().Build()
 
-	s1 := s0.State("s1").Initial().Entry(makeA("enter s1")).Exit(makeA("exit s1")).Build()
+	s1 := s0.State("s1").Initial().Entry("enter s1", makeA("enter s1")).Exit("exit s1", makeA("exit s1")).Build()
 
-	s11 := s1.State("s11").Initial().Entry(makeA("enter s11")).Exit(makeA("exit s11")).Build()
-	s2 := s0.State("s2").Entry(makeA("enter s2")).Exit(makeA("exit s2")).Build()
-	s21 := s2.State("s21").Initial().Entry(makeA("enter s21")).Exit(makeA("exit s21")).Build()
-	s211 := s21.State("s211").Initial().Entry(makeA("enter s211")).Exit(makeA("exit s211")).Build()
+	s11 := s1.State("s11").Initial().Entry("enter s11", makeA("enter s11")).Exit("exit s11", makeA("exit s11")).Build()
+	s2 := s0.State("s2").Entry("enter s2", makeA("enter s2")).Exit("exit s2", makeA("exit s2")).Build()
+	s21 := s2.State("s21").Initial().Entry("enter s21", makeA("enter s21")).Exit("exit s21", makeA("exit s21")).Build()
+	s211 := s21.State("s211").Initial().Entry("enter s211", makeA("enter s211")).Exit("exit s211", makeA("exit s211")).Build()
 
 	s0.AddTransition(evE, s211)
 
