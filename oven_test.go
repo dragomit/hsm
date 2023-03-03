@@ -42,7 +42,7 @@ func TestOven(t *testing.T) {
 	// Also mark any states that are targets of automatic initial transitions.
 	doorOpen := sm.State("Door Open").Entry("light_on", lightOn).Exit("light_off", lightOff).Build()
 	doorClosed := sm.State("Door Closed").Initial().Build()
-	baking := doorClosed.State("Heating").Entry("heating_on", heatingOn).Exit("heating_off", heatingOff).Build()
+	baking := doorClosed.State("Baking").Entry("heating_on", heatingOn).Exit("heating_off", heatingOff).Build()
 	off := doorClosed.State("Off").Initial().Build()
 
 	// Create transitions.

@@ -21,8 +21,8 @@ The following example illustrates most of the library features:
  * Heater is turned on/off on entry to / exit from the Baking state.
  * Light is turned on every time the oven is opened, and turned off when it's closed.
  * Closing the door triggers transition to history state, which means we return to
-   whatever state (Baking or Off) that the oven was in prior to opening the door.
- * When the door is opened for 101 time, the oven breaks!
+   whichever state (Baking or Off) the oven was previously in.
+ * When the door is opened for 101st time, the oven breaks!
 
 ![Oven state machine image](./oven.png)
 
@@ -48,7 +48,7 @@ import (
  }
 
  // Define state machine object which holds the state hierarchy.
- // State machine is parameterized by the extended state. If you don't need extended state, use struct{}.
+ // State machine is parameterized by the extended state type. Use struct{} if you don't need it.
  sm := hsm.StateMachine[*state]{}
 
  // Actions are functions that take hsm.Event and extended state, and return no result
@@ -59,11 +59,11 @@ import (
  dying := func(e hsm.Event, s *state) { fmt.Println("Giving up a ghost") }
 
  // Transition guards are functions taking hsm.Event and extended state, and returning bool.
- // Transition takes place if guard returns true.
+ // Transition takes place if event id matches and the guard returns true.
  isBroken := func(e hsm.Event, s *state) bool { return s.opened == 100 }
  isNotBroken := func(e hsm.Event, s *state) bool { return !isBroken(e, s) }
 
- // Create the states, and assign them entry and exit actions as necessary
+ // Create the states, and assign them entry and exit actions as necessary.
  // Also mark any states that are targets of automatic initial transitions.
  doorOpen := sm.State("Door Open").Entry("light_on", lightOn).Exit("light_off", lightOff).Build()
  doorClosed := sm.State("Door Closed").Initial().Build()
@@ -75,8 +75,7 @@ import (
  // Transition to nil state terminates the state machine.
  doorClosed.Transition(evOpen, nil).Guard("broken", isBroken).Action("dying", dying).Build()
 
- // When door is closed, we return to whichever state we were previously in.
- // We accomplish that using a history transition (either deep or shallow history transition works here).
+ // When the door is closed, we return to whichever state we were previously in.
  doorOpen.Transition(evClose, doorClosed).History(hsm.HistoryShallow).Build()
  baking.AddTransition(evOff, off)
  off.AddTransition(evBake, baking)
@@ -97,7 +96,6 @@ import (
  // functions, but is otherwise not delivered to the state machine. 
  // To drive this point home, we'll use an invalid event id.
  smi.Initialize(hsm.Event{EventId: -1})
-
  // smi.Current() == off
 
  smi.Deliver(hsm.Event{EventId: evBake}) // prints "Heating On"
@@ -120,7 +118,7 @@ import (
  // next time we open the door it should break, and state machine should terminate
  smi.Deliver(hsm.Event{EventId: evOpen}) // prints "Giving up a ghost"
  // smi.Current() == nil
- // note: if any further events are delivered to the state machine, they will be ignored
+ // once terminated, state machine remains terminated, and any further events are ignored
 ``` 
 
 
