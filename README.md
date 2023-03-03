@@ -95,31 +95,90 @@ import (
  // Initialize the instance. The initial event is merely what's passed to the state entry
  // functions, but is otherwise not delivered to the state machine. 
  // To drive this point home, we'll use an invalid event id.
- smi.Initialize(hsm.Event{EventId: -1})
+ smi.Initialize(hsm.Event{Id: -1})
  // smi.Current() == off
 
- smi.Deliver(hsm.Event{EventId: evBake}) // prints "Heating On"
+ smi.Deliver(hsm.Event{Id: evBake}) // prints "Heating On"
  // smi.Current() == baking
 
- smi.Deliver(hsm.Event{EventId: evOpen}) // prints "Heating Off", "Light On"
+ smi.Deliver(hsm.Event{Id: evOpen}) // prints "Heating Off", "Light On"
  // smi.Current() == doorOpen
 
- smi.Deliver(hsm.Event{EventId: evClose}) // prints "Light Off", "Heating On"
+ smi.Deliver(hsm.Event{Id: evClose}) // prints "Light Off", "Heating On"
  // smi.Current() == baking
 
  // open and close 99 more times
  for i := 0; i < 99; i++ {
-     smi.Deliver(hsm.Event{EventId: evOpen})
-     smi.Deliver(hsm.Event{EventId: evClose})
+     smi.Deliver(hsm.Event{Id: evOpen})
+     smi.Deliver(hsm.Event{Id: evClose})
  }
  // smi.Ext.opened == 100
  // smi.Current() == baking
 
  // next time we open the door it should break, and state machine should terminate
- smi.Deliver(hsm.Event{EventId: evOpen}) // prints "Giving up a ghost"
+ smi.Deliver(hsm.Event{Id: evOpen}) // prints "Giving up a ghost"
  // smi.Current() == nil
  // once terminated, state machine remains terminated, and any further events are ignored
 ``` 
+
+## Extended state
+
+Extended state deals with any quantitative aspects of the state (as opposed to enumerable states).
+Typically, extended state will be a pointer to a struct, although you are free to use other types.
+The state machine is parametrized by this type. If you don't need any extended state,
+use `struct{}`:
+```go
+sm := hsm.StateMachine[struct{}]{}
+```
+
+## Events
+
+Events are represented by a struct containing event id and arbitrary event data:
+```go
+type Event struct {
+	Id int
+	Data    any
+}
+```
+The `Id` represents _event type_. For an event to be handled in a given state,
+you must specify a transition rule for that state and `Id` combination.
+
+## States
+
+State machine must have at least one top-level state,
+and exactly one top-level state must be marked as the _initial_ state.
+When initialized, state machine will automatically transition to this state.
+
+States may form an arbitrarily deep hierarchy, with children states nested within the parent states.
+If state machine's initial state is a composite state,
+then exactly one of its sub-states must be marked as initial.
+This rule continues recursively, ensuring that once fully initialized,
+state machine will land in a leaf state.
+
+Similarly, any composite state that's a target of a state transition must have exactly one
+of its sub-states marked as initial.
+
+Note that at any given time, state machine must be in exactly one _leaf state_.
+
+## Event Delivery and State Transitions
+
+When an event is delivered to the state machine,
+the event is matched against the configured transition,
+looking for a matching transition. A matching transition is one where:
+ * transition `eventId` matches the `Id` of the delivered event, and
+ * transition source state matches the current state or one of its parent states, and
+ * transition has no guard condition, or guard conditions is defined and evaluates to true
+
+If more than one transition matches the above conditions, the ambiguity is resolved as follows:
+ * transitions defined for a sub-state take precedence over transitions defined for its parent state
+ * within a given state, transitions are considered in the order in which they were defined in the code
+ * the search ends on the first matching transition
+
+If no matching transition is found, the event is silently ignored.
+
+
+States may define entry and exit actions, which will be executed each time when the state is entered or exited.
+
 
 
 

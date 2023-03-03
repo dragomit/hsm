@@ -71,30 +71,30 @@ func TestOven(t *testing.T) {
 	// Initialize the instance. The initial event is merely what's passed to the entry functions,
 	// but is otherwise not delivered to the state machine. To drive this point home, we'll use
 	// an invalid event id.
-	smi.Initialize(hsm.Event{EventId: -1})
+	smi.Initialize(hsm.Event{Id: -1})
 
 	// confirm we transitioned to "off" state
 	assert.Equal(t, off, smi.Current())
 
-	smi.Deliver(hsm.Event{EventId: evBake}) // prints "Heating On"
+	smi.Deliver(hsm.Event{Id: evBake}) // prints "Heating On"
 	assert.Equal(t, baking, smi.Current())
 
-	smi.Deliver(hsm.Event{EventId: evOpen}) // prints "Heating Off", "Light On"
+	smi.Deliver(hsm.Event{Id: evOpen}) // prints "Heating Off", "Light On"
 	assert.Equal(t, doorOpen, smi.Current())
 
-	smi.Deliver(hsm.Event{EventId: evClose}) // prints "Light Off", "Heating On"
+	smi.Deliver(hsm.Event{Id: evClose}) // prints "Light Off", "Heating On"
 	assert.Equal(t, baking, smi.Current())
 
 	// open and close 99 more times
 	for i := 0; i < 99; i++ {
-		smi.Deliver(hsm.Event{EventId: evOpen})
-		smi.Deliver(hsm.Event{EventId: evClose})
+		smi.Deliver(hsm.Event{Id: evOpen})
+		smi.Deliver(hsm.Event{Id: evClose})
 	}
 	assert.Equal(t, 100, smi.Ext.opened)
 	assert.Equal(t, baking, smi.Current())
 
 	// next time we open the door it should break, and state machine should terminate
-	smi.Deliver(hsm.Event{EventId: evOpen}) // prints "Giving up a ghost"
+	smi.Deliver(hsm.Event{Id: evOpen}) // prints "Giving up a ghost"
 	// note: smi.Current() == nil
 	// note: if any further events are delivered to the state machine, they will be ignored
 }

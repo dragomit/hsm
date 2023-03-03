@@ -191,7 +191,7 @@ func (smi *StateMachineInstance[E]) Initialize(e Event) {
 func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transition[E]) {
 	for src := smi.current; src != nil; src = src.parent {
 		for _, t := range src.transitions {
-			if t.eventId == e.EventId && (t.guard == nil || t.guard(e, smi.Ext)) {
+			if t.eventId == e.Id && (t.guard == nil || t.guard(e, smi.Ext)) {
 				return src, t
 			}
 		}

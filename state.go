@@ -87,11 +87,11 @@ func (sb *StateBuilder[E]) Build() *State[E] {
 
 // Event instance are delivered to state machine,
 // causing it to run actions and change states.
-// EventId identifies type of the event, while Data is an optional arbitrary type
+// Id identifies type of the event, while Data is an optional arbitrary type
 // containing auxiliary event data.
 type Event struct {
-	EventId int
-	Data    any
+	Id   int
+	Data any
 }
 
 type transition[E any] struct {

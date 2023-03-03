@@ -113,9 +113,9 @@ func TestLocalInternalExternal(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			smi := hsm.StateMachineInstance[struct{}]{SM: &sm}
 			buf.Reset()
-			smi.Initialize(hsm.Event{EventId: -1, Data: nil})
+			smi.Initialize(hsm.Event{Id: -1, Data: nil})
 			for _, ev := range test.events {
-				smi.Deliver(hsm.Event{EventId: ev, Data: nil})
+				smi.Deliver(hsm.Event{Id: ev, Data: nil})
 			}
 			if smi.Current() != test.state {
 				wants, got := "nil", "nil"

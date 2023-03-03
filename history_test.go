@@ -78,10 +78,10 @@ func TestHistory(t *testing.T) {
 			smi := hsm.StateMachineInstance[struct{}]{
 				SM: &sm,
 			}
-			smi.Initialize(hsm.Event{EventId: -1, Data: nil})
+			smi.Initialize(hsm.Event{Id: -1, Data: nil})
 			assertState(t, stB, smi.Current())
 			for _, ev := range test.events {
-				smi.Deliver(hsm.Event{EventId: ev, Data: nil})
+				smi.Deliver(hsm.Event{Id: ev, Data: nil})
 			}
 			assertState(t, test.finalState, smi.Current())
 		})
