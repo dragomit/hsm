@@ -302,5 +302,32 @@ Fixing structural errors requires changing code and re-compiling.
 Panicking early, during state machine construction helps smoke out the bugs
 and avoids unexpected errors much later, when state machine instances are used.
 
+## Concurrency and Re-entrancy
+
+Methods involved in building the state machine structure are not safe for concurrent
+use by multiple goroutines.
+
+Once `StateMachine` is finalized, it is effectively immutable
+and safe for concurrent use by multiple `StateMachineInstances`.
+
+While different `StateMachineInstances` are independent of each other
+and can be used concurrently with _each other_,
+`StateMachineInstance` methods of _any single instance_ are not safe for concurrent use.
+
+Furthermore, `StateMachineInstance.Deliver()` is not re-entrant: 
+it must not be called from within a transition action, state entry or exit function,
+or a transition guard function.
+If transition action needs to generate an event to be delivered to the state machine,
+this should be done by writing the event somewhere (channel, list, queue, etc)
+from where it can be picked up and delivered to the state machine _after_ the currently
+executing `StateMachineInstance.Deliver()` method returns.
+
+Finally, transition actions, state entry/exit functions and transition guards should
+not invoke `StateMachineInstance.Current()` method. 
+If they do, the result will be undefined, and it may change in the future.
+The `Current()` method is only safe for use _after_ the `Deliver()` method returns,
+and _before_ the next `Deliver()` method is called.
+
+
 
 
