@@ -22,6 +22,8 @@ The following example illustrates most of the library features:
  * Light is turned on every time the oven is opened, and turned off when it's closed.
  * Closing the door triggers transition to history state, which means we return to
    whichever state (Baking or Off) the oven was previously in.
+   (Note that this is an over-simplification. 
+   Real world ovens can also be switched on/off while the door is open.)
  * When the door is opened for 101st time, the oven breaks!
 
 ![Oven state machine image](./oven.png)
@@ -124,9 +126,13 @@ import (
 ## Extended state
 
 Extended state deals with any quantitative aspects of the state (as opposed to enumerable states).
+The state machine is parametrized by this type.
 Typically, extended state will be a pointer to a struct, although you are free to use other types.
-The state machine is parametrized by this type. If you don't need any extended state,
-use `struct{}`:
+
+```go
+sm := hsm.StateMachine[*state]{}
+```
+If you don't need any extended state, use `struct{}`:
 ```go
 sm := hsm.StateMachine[struct{}]{}
 ```
@@ -153,33 +159,125 @@ States may form an arbitrarily deep hierarchy, with children states nested withi
 If state machine's initial state is a composite state,
 then exactly one of its sub-states must be marked as initial.
 This rule continues recursively, ensuring that once fully initialized,
-state machine will land in a leaf state.
+state machine will land in a _leaf state_.
 
-Similarly, any composite state that's a target of a state transition must have exactly one
+Similarly, any composite state that's the target of a state transition must have exactly one
 of its sub-states marked as initial.
 
-Note that at any given time, state machine must be in exactly one _leaf state_.
+Once initialized, 
+and after any event is delivered to the state machine and processed to completion,
+the state machine will be in a leaf state.
 
 ## Event Delivery and State Transitions
 
 When an event is delivered to the state machine,
-the event is matched against the configured transition,
-looking for a matching transition. A matching transition is one where:
+the configured transitions are searched for a transition matching the event:
  * transition `eventId` matches the `Id` of the delivered event, and
- * transition source state matches the current state or one of its parent states, and
- * transition has no guard condition, or guard conditions is defined and evaluates to true
+ * transition source state matches the current state or any of its ancestors, and
+ * transition has no guard condition, or guard condition is defined and evaluates to true
 
 If more than one transition matches the above conditions, the ambiguity is resolved as follows:
- * transitions defined for a sub-state take precedence over transitions defined for its parent state
- * within a given state, transitions are considered in the order in which they were defined in the code
+ * each sub-state is searched for a matching transition before its parent state,
+   with the search starting at the current, leaf state
+ * within a given state, transitions are searched in the order in which they were defined in the code
  * the search ends on the first matching transition
 
 If no matching transition is found, the event is silently ignored.
 
+### Run to Completion and the Order of Actions
 
-States may define entry and exit actions, which will be executed each time when the state is entered or exited.
+Events are delivered to the state machine by invoking the `StateMachineInstance.Deliver()` method.
+Hsm follows the run-to-completion paradigm - by the time the `Deliver()` method returns,
+all state entry/exit and transition actions have been executed, and state machine is in its new leaf state.
 
+#### External transitions
 
+Each transition has:
+ * _source state_ - state in which the transition is defined.
+   Note that this is not always the same as the current state,
+   since current state can be a child (or more distant descendant) of the source state.
+ * _target state_ - this is the target of the state transition.
 
+```go
+source.Transition(evId, target).Action(...).Build()
+```
+
+The order of actions follows the UML specification:
+ * First the states are exited, starting with the current state, 
+   and going up to (but excluding) the lowest common ancestor (LCA) of the source and target states.
+   State exit actions (if defined) are executed in the order in which the states are exited.
+ * Next, transition action (if defined) is executed.
+ * Next, states are entered, executing any defined entry actions, and landing in the transition target state.
+ * Finally, if the transition target is a composite state,
+   the initial transitions are followed, eventually landing in a leaf state. 
+
+For example, in the state machine shown in the [Quick Start](#quick-start) section,
+delivering the _open_ event while the state machine is in the Baking state will cause
+exiting Baking and Door Closed states and entering Door Open state. 
+(In this case LCA is the implicit top-level state that contains the entire state machine.)
+
+On the other hand, delivering the _off_ event to the Baking state will exit Baking and enter Off state.
+(In this case, LCA is the Door Closed state.)
+
+This transition semantics is known as _external transitions_.
+Hsm also supports internal and local transitions, which are described next.
+
+#### Internal Transitions
+
+Internal transitions don't involve any state changes or state entry/exit actions.
+To define an internal transition, set transition target to be the same as source,
+and mark the transition as internal:
+```go
+baking.Transition(evChangeTemp, baking).Internal().Action(...).Build()
+```
+
+Without specifying internal transition semantics, the transition would be external.
+An external self-transition would result in leaving and re-entering the state.
+
+An internal transition defined for a composite state will also apply to any of its
+(direct or transitive) sub-states, 
+unless a sub-state overrides the behavior by specifying its own transition rule for the same event.
+
+#### Local transitions
+
+When source and target states stand in parent-child (or child-parent) relationship,
+the external transition semantics would involve leaving and re-entering the composite state.
+The alternative _local transition_ semantics avoids this leaving/re-entering.
+For more details,
+see this [Wikipedia entry](https://en.wikipedia.org/wiki/UML_state_machine#Local_versus_external_transitions). 
+
+```go
+parentState.Transition(evId, childState).Local(true).Action(...).Build()
+```
+
+To change the default behavior for the entire state machine to use local rather than external transitions,
+set `LocalDefault` attribute of `StateMachine` to `true`:
+
+```go
+sm := StateMachine[*state]{LocalDefault: true}
+```
+
+## State Machine Structure vs. Instances
+
+`StateMachine` object captures the state chart structure: states, transitions, actions, and guards.
+Application should create a single `StateMachine` object (per each structurally different state chart),
+but it can create an arbitrary number of independent `StateMachineInstance` objects,
+all tied to the same `StateMachine` object.
+
+```go
+sm := hsm.StateMachine[*state]{}
+state1 := hsm.State(...).Build()
+...
+sm.Finalize()
+
+smi1 := hsm.StateMachineInstance[*state]{SM: &sm, Ext: &state{}}
+smi2 := hsm.StateMachineInstance[*state]{SM: &sm, Ext: &state{}}
+...
+```
+
+Typically, `StateMachine` object would be created and finalized during the program initialization,
+while the `StateMachineInstance` objects can be created as needed.
+
+This separation between the state machine structure and instances minimizes the overhead of creating new instances.
 
 
