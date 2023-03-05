@@ -54,7 +54,7 @@ func (sb *StateBuilder[E]) Initial() *StateBuilder[E] {
 	opt := func(s *State[E]) {
 		p := s.parent
 		if p.initial != nil && p.initial != s {
-			panic("parent state " + p.name + " already has initial sub-state " + p.initial.name)
+			panic(fmt.Sprintf("sub-states %s and %s can not both be marked initial", s.name, p.initial.name))
 		}
 		p.initial = s
 	}
@@ -142,7 +142,7 @@ func (s *State[E]) Name() string {
 func (s *State[E]) validate() {
 	for !s.IsLeaf() && !s.validated {
 		if s.initial == nil {
-			panic("state " + s.name + " must have initial substate")
+			panic("state " + s.name + " must have initial sub-state")
 		}
 		s.validated = true
 		s = s.initial
@@ -211,6 +211,13 @@ func (tb *TransitionBuilder[E]) Action(name string, f func(Event, E)) *Transitio
 // Internal transitions specified in composite-states will be inherited by all the sub-states,
 // unless explicitly overriden.
 func (tb *TransitionBuilder[E]) Internal() *TransitionBuilder[E] {
+	if tb.src != tb.t.target {
+		targetName := "nil"
+		if tb.t.target != nil {
+			targetName = tb.t.target.name
+		}
+		panic(fmt.Sprintf("Transition %s -> %s can not be internal", tb.src.name, targetName))
+	}
 	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.internal = true })
 	return tb
 }
@@ -225,7 +232,7 @@ func (tb *TransitionBuilder[E]) Internal() *TransitionBuilder[E] {
 func (tb *TransitionBuilder[E]) Local(b bool) *TransitionBuilder[E] {
 	opt := func(s *State[E], t *transition[E]) {
 		if parent := getParent(s, t.target); parent == nil {
-			panic("No point in specifying local transition " + s.name + " -> " + t.target.name)
+			panic("Transition " + s.name + " -> " + t.target.name + " can not be local")
 		}
 		t.local = b
 	}

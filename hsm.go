@@ -2,7 +2,6 @@ package hsm
 
 import (
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -53,6 +52,7 @@ type StateMachineInstance[E any] struct {
 // and exactly one of those must be marked as initial state.
 func (sm *StateMachine[E]) State(name string) *StateBuilder[E] {
 	sm.top.sm = sm
+	sm.top.name = "machine"
 	return sm.top.State(name)
 }
 
@@ -60,18 +60,19 @@ func (sm *StateMachine[E]) State(name string) *StateBuilder[E] {
 // Finalize must be called before any state machine instances are initialized,
 // and state machine structure must not be modified after this method is called.
 func (sm *StateMachine[E]) Finalize() {
+	sm.top.name = "machine"
 	sm.terminal.name = "terminal state"
 	// check for unused stateBuilders - likely a forgotten call to Build() method
 	for _, sb := range sm.stateBuilders {
-		log.Printf("Warning: state %s builder left unused. Forgotten call to Build()?", sb.name)
+		panic(fmt.Sprintf("state %s builder left unused. Forgotten call to Build()?", sb.name))
 	}
 
 	// check for unused transition builders - likely a forgotten call to Build() method
 	for _, sb := range sm.transitionBuilders {
-		log.Printf(
-			"Warning: transition builder for event %d, %s --> %s left unused. Forgotten call to Build()?",
+		panic(fmt.Sprintf(
+			"transition builder for event %d, %s --> %s left unused. Forgotten call to Build()?",
 			sb.t.eventId, sb.src.name, sb.t.target.name,
-		)
+		))
 	}
 
 	// must be able to enter root state

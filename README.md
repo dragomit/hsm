@@ -280,4 +280,27 @@ while the `StateMachineInstance` objects can be created as needed.
 
 This separation between the state machine structure and instances minimizes the overhead of creating new instances.
 
+## Panic Early, not Often
+
+State machine construction will panic when a structural error is detected:
+ * unspecified or over-specified initial state of the state machine
+ * composite state targeted by a transition with an unspecified or over-specified initial sub-state
+ * invalid internal or local transition specification
+
+Furthermore, state machine will panic if an unfinished state or transition builder is detected.
+For example, consider the following code:
+```go
+srcState.Transition(evId, targetState).Action(someAction) // forgotten .Build() call
+sm.Finalize() // <-- panics at this point
+```
+Without invoking the final `.Build()` method, the transition is not installed.
+This could lead to a hard to find bug, 
+which is why `Finalize()` will panic with an appropriate error message.
+
+The rationale behind these design choices is that it is best to find bugs and raise errors as early as possible.
+Fixing structural errors requires changing code and re-compiling.
+Panicking early, during state machine construction helps smoke out the bugs
+and avoids unexpected errors much later, when state machine instances are used.
+
+
 
