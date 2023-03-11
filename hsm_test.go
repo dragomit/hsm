@@ -127,7 +127,7 @@ func TestLocalInternalExternal(t *testing.T) {
 				}
 				t.Errorf("Wants state %s got %s", wants, got)
 			}
-			assert.Equal(t, buf.String(), test.actions)
+			assert.Equal(t, test.actions, buf.String())
 		})
 	}
 }
@@ -164,4 +164,95 @@ func TestDeliverReturnValues(t *testing.T) {
 	handled, src = smi.Deliver(hsm.Event{Id: evC})
 	assert.False(t, handled)
 	assert.Nil(t, src)
+}
+
+func TestMultipleActions(t *testing.T) {
+	const (
+		evX = 0
+	)
+
+	type empty struct{}
+	var (
+		buf                        bytes.Buffer
+		guard1result, guard2result bool
+	)
+
+	sm := hsm.StateMachine[empty]{}
+
+	entry1 := func(hsm.Event, empty) { buf.WriteString("entry1|") }
+	entry2 := func(hsm.Event, empty) { buf.WriteString("entry2|") }
+
+	exit1 := func(hsm.Event, empty) { buf.WriteString("exit1|") }
+	exit2 := func(hsm.Event, empty) { buf.WriteString("exit2|") }
+
+	guard1 := func(hsm.Event, empty) bool { return guard1result }
+	guard2 := func(hsm.Event, empty) bool { return guard2result }
+
+	stateA := sm.State("1").Initial().Exit("exit1", exit1).Exit("", exit2).Build()
+	// note: left out exit2 name on purpose - diagram should skip it
+	stateB := sm.State("2").Entry("entry1", entry1).Entry("entry2", entry2).Build()
+
+	stateA.Transition(evX, stateB).Guard("guard1", guard1).Guard("guard2", guard2).Build()
+
+	sm.Finalize()
+
+	tests := []struct {
+		name  string
+		g1    bool
+		g2    bool
+		out   string
+		state *hsm.State[empty]
+	}{
+		{
+			name:  "neither met",
+			state: stateA,
+		},
+
+		{
+			name:  "only g2 met",
+			g2:    true,
+			state: stateA,
+		},
+		{
+			name:  "only g1 met",
+			g1:    true,
+			state: stateA,
+		},
+		{
+			name:  "both met",
+			g1:    true,
+			g2:    true,
+			state: stateB,
+			out:   "exit1|exit2|entry1|entry2|",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			smi := hsm.StateMachineInstance[empty]{SM: &sm}
+			buf.Reset()
+			smi.Initialize(hsm.Event{})
+			guard1result, guard2result = test.g1, test.g2
+			smi.Deliver(hsm.Event{Id: evX})
+			assert.Equal(t, test.state, smi.Current())
+			assert.Equal(t, test.out, buf.String())
+		})
+	}
+
+	wantsDiagram := `@startuml
+
+state 1
+1 : exit / exit1
+[*] --> 1
+state 2
+2 : entry / entry1;entry2
+1 --> 2 : X[guard1;guard2]
+
+@enduml
+`
+
+	diagram := sm.DiagramPUML(func(i int) string {
+		return "X"
+	})
+	assert.Equal(t, wantsDiagram, diagram)
 }

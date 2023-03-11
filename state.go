@@ -28,22 +28,97 @@ type State[E any] struct {
 	history             History // types of history transitions into this state
 }
 
+type namedAction[E any] struct {
+	name   string
+	action func(Event, E)
+}
+
+type namedGuard[E any] struct {
+	name  string
+	guard func(Event, E) bool
+}
+
+func (na namedAction[E]) Name() string {
+	return na.name
+}
+
+func (ng namedGuard[E]) Name() string {
+	return ng.name
+}
+
+type named interface {
+	Name() string
+}
+
+// combines names of multiple items by separating with ';', skipping any that are empty
+func combineNames[N named](items []N) string {
+	var nonEmptyNames []string
+	for _, item := range items {
+		if item.Name() != "" {
+			nonEmptyNames = append(nonEmptyNames, item.Name())
+		}
+	}
+	return strings.Join(nonEmptyNames, ";")
+}
+
+// returns combined name and combined action (one that executes all actions in sequence)
+func combineActions[E any](namedActions []namedAction[E]) (name string, action func(event Event, e E)) {
+	// avoid extra indirection in the case of a single action
+	if len(namedActions) == 1 {
+		return namedActions[0].name, namedActions[0].action
+	}
+	return combineNames(namedActions), func(event Event, e E) {
+		for _, na := range namedActions {
+			na.action(event, e)
+		}
+	}
+}
+
+// returns combined name and combined action (one that executes all actions in sequence)
+func combineGuards[E any](namedGuards []namedGuard[E]) (name string, guard func(event Event, e E) bool) {
+	// avoid extra indirection in the case of a single guard
+	if len(namedGuards) == 1 {
+		return namedGuards[0].name, namedGuards[0].guard
+	}
+	return combineNames(namedGuards), func(event Event, e E) bool {
+		for _, ng := range namedGuards {
+			if !ng.guard(event, e) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
 // StateBuilder provides Fluent API for building new [State].
 type StateBuilder[E any] struct {
-	parent  *State[E]
-	name    string
-	options []stateOption[E]
+	parent         *State[E]
+	name           string
+	options        []stateOption[E]
+	entries, exits []namedAction[E]
 }
 
 // Entry sets func f as the entry action for the state being built.
+// May be called multiple times to assign multiple entry actions, to be executed in the order of assignment.
 func (sb *StateBuilder[E]) Entry(name string, f func(Event, E)) *StateBuilder[E] {
-	sb.options = append(sb.options, func(s *State[E]) { s.entry, s.entryName = f, name })
+	sb.entries = append(sb.entries, namedAction[E]{name: name, action: f})
+	if len(sb.entries) == 1 {
+		sb.options = append(sb.options, func(s *State[E]) {
+			s.entryName, s.entry = combineActions(sb.entries)
+		})
+	}
 	return sb
 }
 
 // Exit sets func f as the exit action for the state being built.
+// May be called multiple times to assign multiple exit actions, to be executed in the order of assignment.
 func (sb *StateBuilder[E]) Exit(name string, f func(Event, E)) *StateBuilder[E] {
-	sb.options = append(sb.options, func(s *State[E]) { s.exit, s.exitName = f, name })
+	sb.exits = append(sb.exits, namedAction[E]{name: name, action: f})
+	if len(sb.exits) == 1 {
+		sb.options = append(sb.options, func(s *State[E]) {
+			s.exitName, s.exit = combineActions(sb.exits)
+		})
+	}
 	return sb
 }
 
@@ -183,13 +258,21 @@ type TransitionBuilder[E any] struct {
 	src     *State[E]
 	t       *transition[E]
 	options []transitionOption[E]
+	guards  []namedGuard[E]
+	actions []namedAction[E]
 }
 
 // Guard specifies the guard condition - a function that must return true
 // for the transition to take place.
 // Guard name need not be unique, and is only used for state machine diagram generation.
 func (tb *TransitionBuilder[E]) Guard(name string, f func(Event, E) bool) *TransitionBuilder[E] {
-	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.guard, t.guardName = f, name })
+	tb.guards = append(tb.guards, namedGuard[E]{name: name, guard: f})
+	if len(tb.guards) == 1 {
+		tb.options = append(tb.options, func(s *State[E], t *transition[E]) {
+			t.guardName, t.guard = combineGuards(tb.guards)
+		})
+	}
+
 	return tb
 }
 
@@ -197,8 +280,15 @@ func (tb *TransitionBuilder[E]) Guard(name string, f func(Event, E) bool) *Trans
 // The transition action is invoked after any applicable state exit functions,
 // and before any applicable state entry functions.
 // Action name need not be unique, and is only used for state machine diagram generation.
+// This method may be called multiple times to assign multiple actions to the same transition,
+// to be executed in the order in which they were defined.
 func (tb *TransitionBuilder[E]) Action(name string, f func(Event, E)) *TransitionBuilder[E] {
-	tb.options = append(tb.options, func(s *State[E], t *transition[E]) { t.action, t.actionName = f, name })
+	tb.actions = append(tb.actions, namedAction[E]{name: name, action: f})
+	if len(tb.actions) == 1 {
+		tb.options = append(tb.options, func(s *State[E], t *transition[E]) {
+			t.actionName, t.action = combineActions(tb.actions)
+		})
+	}
 	return tb
 }
 

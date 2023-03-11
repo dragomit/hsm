@@ -201,7 +201,7 @@ func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transiti
 }
 
 // Deliver an event to the state machine, returning whether the event was handled, and in which state.
-// Any applicable transitions and actions will be completed before this method returns.
+// Any applicable transitions and actions will be completed before the method returns.
 // This method is not reentrant - do not invoke it from within transition actions,
 // state entry/exit functions, or transition guard functions.
 // If transition action needs to generate a new event,
