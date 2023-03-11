@@ -9,7 +9,7 @@ import (
 // To create a top-level state in a state machine,
 // use [hsm.StateMachine.State] method.
 // To create a sub-state of a composite state,
-// use [hsm.State.SubState] method.
+// use [hsm.State.State] method.
 // State (and its containing StateMachine) are parameterized by E - the extended state type.
 // E is usually a pointer to a struct containing various quantitative aspects of the object's state,
 // as opposed to the qualitative aspects captured through the state machine's discrete states.

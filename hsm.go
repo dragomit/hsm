@@ -205,7 +205,7 @@ func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transiti
 // This method is not reentrant - do not invoke it from within transition actions,
 // state entry/exit functions, or transition guard functions.
 // If transition action needs to generate a new event,
-// arrange for that event to be delivered to instance only _after_ the current Deliver() method returns.
+// arrange for that event to be delivered to the instance only _after_ the current Deliver() method returns.
 func (smi *StateMachineInstance[E]) Deliver(e Event) (handled bool, src *State[E]) {
 	if !smi.initialized {
 		panic("State machine must be initialized before delivering the first event")
@@ -323,7 +323,9 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) (handled bool, src *State[E
 }
 
 // Current returns current (leaf) state, or nil if state machine has terminated.
-// This method should only be invoked between [StateMachineInstance.Deliver] invocations.
+// This method should not be invoked while state machine is processing an event.
+// In other words, the result is not well-defined if invoked from within state entry/exit actions,
+// transition actions, or transition guards.
 func (smi *StateMachineInstance[E]) Current() *State[E] {
 	return smi.current
 }

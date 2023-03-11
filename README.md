@@ -15,7 +15,7 @@ The library implements a subset of UML state charts, with the following main fea
  * PlantUML diagram generation.
  * High-performance.
 
-## Quick start
+## Quick Start
 
 The following example illustrates most of the library features:
  * Heater is turned on/off on entry to / exit from the Baking state.
@@ -333,6 +333,15 @@ If they do, the result will be undefined, and it may change in the future.
 The `Current()` method is only safe for use _after_ the `Deliver()` method returns,
 and _before_ the next `Deliver()` method is called.
 
+## PlantUML Diagram Generation
 
+Once state machine is finalized, hsm can generate the corresponding
+[PlantUML](https://plantuml.com/) [state diagram](https://plantuml.com/state-diagram).
 
+See [Quick Start](#quick-start) section for an example of a generated diagram.
+
+PlantUML does pretty well with simple/shallow state machines,
+but struggles with graphs with deeply-nested states.
+Note also that PlantUML supports limited
+[layout customization](https://crashedmind.github.io/PlantUMLHitchhikersGuide/layout/layout.html).
 
