@@ -36,101 +36,103 @@ import (
 	"testing"
 )
 
- // events
- const (
-     evOpen = iota
-     evClose
-     evBake
-     evOff
- )
+// event types, enumerated as integers
+const (
+evOpen = iota
+evClose
+evBake
+evOff
+)
 
- // extended state will keep track of how many times the oven door was opened
- type state struct {
-     opened int
- }
+// extended state will keep track of how many times the oven door was opened
+type eState struct {
+opened int
+}
 
- // Define state machine object which holds the state hierarchy.
- // State machine is parameterized by the extended state type. Use struct{} if you don't need it.
- sm := hsm.StateMachine[*state]{}
+// Define state machine object which holds the state hierarchy.
+// State machine is parameterized by the extended state. In this case that's *eState.
+sm := hsm.StateMachine[*eState]{}
 
- // Actions are functions that take hsm.Event and extended state, and return no result
- heatingOn := func(e hsm.Event, s *state) { fmt.Println("Heating On") }
- heatingOff := func(e hsm.Event, s *state) { fmt.Println("Heating Off") }
- lightOn := func(e hsm.Event, s *state) { s.opened++; fmt.Println("Light On") }
- lightOff := func(e hsm.Event, s *state) { fmt.Println("Light Off") }
- dying := func(e hsm.Event, s *state) { fmt.Println("Giving up a ghost") }
+// Actions are functions taking hsm.Event and extended state, and returning nothing.
+heatingOn := func(e hsm.Event, s *eState) { fmt.Println("Heating On") }
+heatingOff := func(e hsm.Event, s *eState) { fmt.Println("Heating Off") }
+lightOn := func(e hsm.Event, s *eState) { s.opened++; fmt.Println("Light On") }
+lightOff := func(e hsm.Event, s *eState) { fmt.Println("Light Off") }
+dying := func(e hsm.Event, s *eState) { fmt.Println("Giving up a ghost") }
 
- // Transition guards are functions taking hsm.Event and extended state, and returning bool.
- // Transition takes place if event id matches and the guard returns true.
- isBroken := func(e hsm.Event, s *state) bool { return s.opened == 100 }
- isNotBroken := func(e hsm.Event, s *state) bool { return !isBroken(e, s) }
+// Transition guards are functions taking hsm.Event and extended state, and returning bool.
+// Transition takes place if guard returns true.
+isBroken := func(e hsm.Event, s *eState) bool { return s.opened == 100 }
+isNotBroken := func(e hsm.Event, s *eState) bool { return !isBroken(e, s) }
 
- // Create the states, and assign them entry and exit actions as necessary.
- // Also mark any states that are targets of automatic initial transitions.
- doorOpen := sm.State("Door Open").Entry("light_on", lightOn).Exit("light_off", lightOff).Build()
- doorClosed := sm.State("Door Closed").Initial().Build()
- baking := doorClosed.State("Baking").Entry("heating_on", heatingOn).Exit("heating_off", heatingOff).Build()
- off := doorClosed.State("Off").Initial().Build()
+// Define the states, and assign them entry and exit actions as necessary
+// Also mark any states that are targets of automatic initial transitions.
+doorOpen := sm.State("Door Open").Entry("light_on", lightOn).Exit("light_off", lightOff).Build()
+doorClosed := sm.State("Door Closed").Initial().Build()
+baking := doorClosed.State("Baking").Entry("heating_on", heatingOn).Exit("heating_off", heatingOff).Build()
+off := doorClosed.State("Off").Initial().Build()
 
- // Create transitions.
- doorClosed.Transition(evOpen, doorOpen).Guard("not broken", isNotBroken).Build()
- // Transition to nil state terminates the state machine.
- doorClosed.Transition(evOpen, nil).Guard("broken", isBroken).Action("dying", dying).Build()
+// Define the transitions.
+doorClosed.Transition(evOpen, doorOpen).Guard("not broken", isNotBroken).Build()
+// Transition to nil state terminates the state machine.
+doorClosed.Transition(evOpen, nil).Guard("broken", isBroken).Action("dying", dying).Build()
 
- // When the door is closed, we return to whichever state we were previously in.
- doorOpen.Transition(evClose, doorClosed).History(hsm.HistoryShallow).Build()
- baking.AddTransition(evOff, off)
- off.AddTransition(evBake, baking)
+// When door is closed, we return to whichever state we were previously in.
+// We accomplish that using history transition (either deep or shallow history would work here).
+doorOpen.Transition(evClose, doorClosed).History(hsm.HistoryShallow).Build()
+baking.AddTransition(evOff, off)
+off.AddTransition(evBake, baking)
 
- // State machine must be finalized before it can be used.
- sm.Finalize()
+// State machine must be finalized before it can be used.
+sm.Finalize()
 
- // Print PlantUML diagram for this state machine.
- evMapper := func(ev int) string {
-     return []string{"open", "close", "bake", "off"}[ev]
- }
- fmt.Println(sm.DiagramPUML(evMapper))
+// Print PlantUML diagram for this state machine.
+evMapper := func(ev int) string {
+return []string{"open", "close", "bake", "off"}[ev]
+}
+fmt.Println(sm.DiagramPUML(evMapper))
 
- // Create an instance of this state machine.
- smi := hsm.StateMachineInstance[*state]{SM: &sm, Ext: &state{}}
+// Create an instance of this state machine.
+smi := hsm.StateMachineInstance[*eState]{SM: &sm, Ext: &eState{}}
 
- // Initialize the instance. The initial event is merely what's passed to the state entry
- // functions, but is otherwise not delivered to the state machine. 
- // To drive this point home, we'll use an invalid event id.
- smi.Initialize(hsm.Event{Id: -1})
- // smi.Current() == off
+// Initialize the instance. The initial event is merely what's passed to the entry functions,
+// but is otherwise not delivered to the state machine. To drive this point home, we'll use
+// an invalid event id, and nil event data.
+smi.Initialize(hsm.Event{Id: -1, Data: nil})
 
- smi.Deliver(hsm.Event{Id: evBake}) // prints "Heating On"
- // smi.Current() == baking
+// smi.Current() == off
 
- smi.Deliver(hsm.Event{Id: evOpen}) // prints "Heating Off", "Light On"
- // smi.Current() == doorOpen
+smi.Deliver(hsm.Event{Id: evBake}) // prints "Heating On"
+// smi.Current() == baking
 
- smi.Deliver(hsm.Event{Id: evClose}) // prints "Light Off", "Heating On"
- // smi.Current() == baking
+smi.Deliver(hsm.Event{Id: evOpen}) // prints "Heating Off", "Light On"
+// smi.Current() == doorOpen
 
- // open and close 99 more times
- for i := 0; i < 99; i++ {
-     smi.Deliver(hsm.Event{Id: evOpen})
-     smi.Deliver(hsm.Event{Id: evClose})
- }
- // smi.Ext.opened == 100
- // smi.Current() == baking
+smi.Deliver(hsm.Event{Id: evClose}) // prints "Light Off", "Heating On"
+// smi.Current() == baking
 
- // next time we open the door it should break, and state machine should terminate
- smi.Deliver(hsm.Event{Id: evOpen}) // prints "Giving up a ghost"
- // smi.Current() == nil
- // once terminated, state machine remains terminated, and any further events are ignored
+// open and close 99 more times
+for i := 0; i < 99; i++ {
+  smi.Deliver(hsm.Event{Id: evOpen})
+  smi.Deliver(hsm.Event{Id: evClose})
+}
+// smi.Ext.opened == 100
+// smi.Current() == baking
+
+// next time we open the door it should break, and state machine should terminate
+smi.Deliver(hsm.Event{Id: evOpen}) // prints "Giving up a ghost"
+// smi.Current() == nil
+// once terminated, state machine remains terminated, and any further events are ignored
 ``` 
 
 ## Extended state
 
-Extended state deals with any quantitative aspects of the state (as opposed to enumerable states).
+Extended state deals with any quantitative aspects of the object's state (as opposed to enumerable states).
 The state machine is parametrized by this type.
 Typically, extended state will be a pointer to a struct, although you are free to use other types.
 
 ```go
-sm := hsm.StateMachine[*state]{}
+sm := hsm.StateMachine[*eState]{}
 ```
 If you don't need any extended state, use `struct{}`:
 ```go
@@ -157,12 +159,12 @@ When initialized, state machine will automatically transition to this state.
 
 States may form an arbitrarily deep hierarchy, with children states nested within the parent states.
 If state machine's initial state is a composite state,
-then exactly one of its sub-states must be marked as initial.
+then exactly one of its substates must be marked as initial.
 This rule continues recursively, ensuring that once fully initialized,
 state machine will land in a _leaf state_.
 
 Similarly, any composite state that's the target of a state transition must have exactly one
-of its sub-states marked as initial.
+of its substates marked as initial.
 
 Once initialized, 
 and after any event is delivered to the state machine and processed to completion,
@@ -171,16 +173,19 @@ the state machine will be in a leaf state.
 ## Event Delivery and State Transitions
 
 When an event is delivered to the state machine,
-the configured transitions are searched for a transition matching the event:
+the configured transitions are searched for a matching transition - one satisfying these conditions:
  * transition `eventId` matches the `Id` of the delivered event, and
  * transition source state matches the current state or any of its ancestors, and
  * transition has no guard condition, or guard condition is defined and evaluates to true
 
-If more than one transition matches the above conditions, the ambiguity is resolved as follows:
- * each sub-state is searched for a matching transition before its parent state,
-   with the search starting at the current, leaf state
+The search for a matching transition terminates on the first successful match,
+using the following search order:
+ * each substate is searched before its parent state,
+   with the search starting at the current leaf state
  * within a given state, transitions are searched in the order in which they were defined in the code
- * the search ends on the first matching transition
+
+In this way we ensure that behavior defined in a super-state will apply to all its substates,
+but also that any substate can override the super-state's behavior. 
 
 If no matching transition is found, the event is silently ignored.
 
@@ -194,8 +199,7 @@ all state entry/exit and transition actions have been executed, and state machin
 
 Each transition has:
  * _source state_ - state in which the transition is defined.
-   Note that this is not always the same as the current state,
-   since current state can be a child (or more distant descendant) of the source state.
+   If source state is a composite state, the transition will also apply to all its substates. 
  * _target state_ - this is the target of the state transition.
 
 ```go
@@ -212,12 +216,12 @@ The order of actions follows the UML specification:
    the initial transitions are followed, eventually landing in a leaf state. 
 
 For example, in the state machine shown in the [Quick Start](#quick-start) section,
-delivering the _open_ event while the state machine is in the Baking state will cause
-exiting Baking and Door Closed states and entering Door Open state. 
+delivering the "open" event while the state machine is in the "Baking" state will cause
+exiting "Baking" and "Door Closed" states and entering "Door Open" state. 
 (In this case LCA is the implicit top-level state that contains the entire state machine.)
 
-On the other hand, delivering the _off_ event to the Baking state will exit Baking and enter Off state.
-(In this case, LCA is the Door Closed state.)
+On the other hand, delivering the "off" event to the "Baking" state will exit "Baking" and enter "Off" state.
+(In this case, LCA is the "Door Closed" state.)
 
 This transition semantics is known as _external transitions_.
 Hsm also supports internal and local transitions, which are described next.
@@ -235,8 +239,8 @@ Without specifying internal transition semantics, the transition would be extern
 An external self-transition would result in leaving and re-entering the state.
 
 An internal transition defined for a composite state will also apply to any of its
-(direct or transitive) sub-states, 
-unless a sub-state overrides the behavior by specifying its own transition rule for the same event.
+(direct or transitive) substates, 
+unless a substate overrides the behavior by specifying its own transition rule for the same event.
 
 #### Local transitions
 
@@ -250,11 +254,12 @@ see this [Wikipedia entry](https://en.wikipedia.org/wiki/UML_state_machine#Local
 parentState.Transition(evId, childState).Local(true).Action(...).Build()
 ```
 
-To change the default behavior for the entire state machine to use local rather than external transitions,
+To change the default behavior for the entire state machine
+to use local rather than external transitions (where applicable),
 set `LocalDefault` attribute of `StateMachine` to `true`:
 
 ```go
-sm := StateMachine[*state]{LocalDefault: true}
+sm := StateMachine[*eState]{LocalDefault: true}
 ```
 
 ## State Machine Structure vs. Instances
@@ -265,13 +270,13 @@ but it can create an arbitrary number of independent `StateMachineInstance` obje
 all tied to the same `StateMachine` object.
 
 ```go
-sm := hsm.StateMachine[*state]{}
+sm := hsm.StateMachine[*eState]{}
 state1 := hsm.State(...).Build()
 ...
 sm.Finalize()
 
-smi1 := hsm.StateMachineInstance[*state]{SM: &sm, Ext: &state{}}
-smi2 := hsm.StateMachineInstance[*state]{SM: &sm, Ext: &state{}}
+smi1 := hsm.StateMachineInstance[*eState]{SM: &sm, Ext: &eState{}}
+smi2 := hsm.StateMachineInstance[*eState]{SM: &sm, Ext: &eState{}}
 ...
 ```
 
@@ -284,7 +289,7 @@ This separation between the state machine structure and instances minimizes the 
 
 State machine construction will panic when a structural error is detected:
  * unspecified or over-specified initial state of the state machine
- * composite state targeted by a transition with an unspecified or over-specified initial sub-state
+ * composite state targeted by a transition with an unspecified or over-specified initial substate
  * invalid internal or local transition specification
 
 Furthermore, state machine will panic if an unfinished state or transition builder is detected.
