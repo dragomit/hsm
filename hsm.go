@@ -200,13 +200,13 @@ func (smi *StateMachineInstance[E]) getTransition(e Event) (*State[E], *transiti
 	return nil, nil
 }
 
-// Deliver an event to the state machine. Any applicable transitions and actions
-// will be completed before this method returns.
+// Deliver an event to the state machine, returning whether the event was handled, and in which state.
+// Any applicable transitions and actions will be completed before this method returns.
 // This method is not reentrant - do not invoke it from within transition actions,
 // state entry/exit functions, or transition guard functions.
 // If transition action needs to generate a new event,
 // arrange for that event to be delivered to instance only _after_ the current Deliver() method returns.
-func (smi *StateMachineInstance[E]) Deliver(e Event) {
+func (smi *StateMachineInstance[E]) Deliver(e Event) (handled bool, src *State[E]) {
 	if !smi.initialized {
 		panic("State machine must be initialized before delivering the first event")
 	}
@@ -217,6 +217,7 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 	if t == nil {
 		return
 	}
+	handled = true
 	if t.internal {
 		if t.action != nil {
 			t.action(e, smi.Ext)
@@ -318,6 +319,7 @@ func (smi *StateMachineInstance[E]) Deliver(e Event) {
 			s.entry(e, smi.Ext)
 		}
 	}
+	return
 }
 
 // Current returns current (leaf) state, or nil if state machine has terminated.

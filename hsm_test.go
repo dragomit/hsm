@@ -23,7 +23,7 @@ func TestLocalInternalExternal(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	// action-maker
+	// Action-maker. Each action stuffs string into the buffer, to be checked by tests.
 	makeA := func(txt string) func(hsm.Event, struct{}) {
 		return func(hsm.Event, struct{}) {
 			buf.WriteString(txt)
@@ -130,4 +130,38 @@ func TestLocalInternalExternal(t *testing.T) {
 			assert.Equal(t, buf.String(), test.actions)
 		})
 	}
+}
+
+func TestDeliverReturnValues(t *testing.T) {
+	const (
+		evA = iota
+		evB
+		evC
+	)
+
+	type empty struct{}
+
+	sm := hsm.StateMachine[empty]{}
+	parent := sm.State("parent").Initial().Build()
+	child := parent.State("child").Initial().Build()
+
+	parent.AddTransition(evA, parent)
+	parent.AddTransition(evB, parent)
+	child.AddTransition(evB, child)
+	sm.Finalize()
+
+	smi := hsm.StateMachineInstance[empty]{SM: &sm}
+	smi.Initialize(hsm.Event{Id: -1})
+
+	handled, src := smi.Deliver(hsm.Event{Id: evA})
+	assert.True(t, handled)
+	assert.Equal(t, parent, src)
+
+	handled, src = smi.Deliver(hsm.Event{Id: evB})
+	assert.True(t, handled)
+	assert.Equal(t, child, src)
+
+	handled, src = smi.Deliver(hsm.Event{Id: evC})
+	assert.False(t, handled)
+	assert.Nil(t, src)
 }
