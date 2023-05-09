@@ -72,7 +72,10 @@ func TestHsm(t *testing.T) {
 	s1.AddTransition(evA, s1)
 	s1.AddTransition(evC, s2)
 
-	s11.Transition(evH, s11).Internal().Guard("is foo", func(event Event, h *hs) bool { return h.isFoo(event) }).Build()
+	s11.Transition(evH, s11).Internal().
+		Guard("is foo", func(event Event, h *hs) bool { return h.isFoo(event) }).
+		Action("unset foo", func(event Event, h *hs) { h.unsetFoo(event) }).
+		Build()
 	s11.AddTransition(evG, s211)
 
 	s2.AddTransition(evC, s1)
@@ -177,7 +180,10 @@ func BenchmarkHsm(b *testing.B) {
 	s1.AddTransition(evA, s1)
 	s1.AddTransition(evC, s2)
 
-	s11.Transition(evH, s11).Internal().Guard("is foo", func(event Event, h *hs) bool { return h.isFoo(event) }).Build()
+	s11.Transition(evH, s11).Internal().
+		Guard("is foo", func(event Event, h *hs) bool { return h.isFoo(event) }).
+		Action("unset foo", func(event Event, h *hs) { h.unsetFoo(event) }).
+		Build()
 	s11.AddTransition(evG, s211)
 
 	s2.AddTransition(evC, s1)
