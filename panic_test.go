@@ -66,7 +66,6 @@ func TestPanicTwoInitialTransitions(t *testing.T) {
 		"sub-states two and one can not both be marked initial",
 		func() { sm.State("two").Initial().Build() },
 	)
-
 }
 
 func TestPanicForgottenTransitionBuild(t *testing.T) {
@@ -81,4 +80,10 @@ func TestPanicForgottenStateBuild(t *testing.T) {
 	sm.State("initial").Initial().Build()
 	sm.State("forgotten")
 	assert.PanicsWithValue(t, "state forgotten builder left unused. Forgotten call to Build()?", sm.Finalize)
+}
+
+func TestNilStateName(t *testing.T) {
+	var s *hsm.State[struct{}]
+	assert.Equal(t, "nil", s.String())
+	assert.Equal(t, "nil", s.Name())
 }

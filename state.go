@@ -209,7 +209,15 @@ func (s *State[E]) State(name string) *StateBuilder[E] {
 
 // Name returns state's name
 func (s *State[E]) Name() string {
+	if s == nil {
+		return "nil"
+	}
 	return s.name
+}
+
+// String returns state's name. It is a synonym for Name().
+func (s *State[E]) String() string {
+	return s.Name()
 }
 
 // validate checks that if state is entered, a unique path exists through initial transitions
