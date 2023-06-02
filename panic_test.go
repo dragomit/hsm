@@ -51,6 +51,13 @@ func TestPanicNoInitialForTarget(t *testing.T) {
 	assert.PanicsWithValue(t, "state foo must have initial sub-state", sm.Finalize)
 }
 
+func TestNoPanicForInternalTransition(t *testing.T) {
+	sm, foo, _, _ := setup()
+	sm.State("initial").Initial().Build()
+	foo.Transition(0, foo).Internal().Action("nop", func(hsm.Event, struct{}) {}).Build()
+	sm.Finalize()
+}
+
 func TestPanicTwoInitialTransitions(t *testing.T) {
 	sm, _, _, _ := setup()
 	sm.State("one").Initial().Build()

@@ -83,8 +83,10 @@ func (sm *StateMachine[E]) Finalize() {
 		for _, t := range s.transitions {
 			sm.history |= t.history
 			t.target.history |= t.history
-			// must be able to enter any state that's target of a transition
-			t.target.validate()
+			// must be able to enter any state that's target of a transition, except for internal transitions
+			if !t.internal {
+				t.target.validate()
+			}
 		}
 		for _, s1 := range s.children {
 			recurseValidate(s1)
