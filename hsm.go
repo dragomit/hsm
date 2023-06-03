@@ -2,7 +2,6 @@ package hsm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type History int
@@ -93,91 +92,6 @@ func (sm *StateMachine[E]) Finalize() {
 		}
 	}
 	recurseValidate(&sm.top)
-}
-
-// DiagramPUML builds a PlantUML diagram of a finalized state machine.
-// evNameMapper provides mapping of event ids to event names.
-func (sm *StateMachine[E]) DiagramPUML(evNameMapper func(int) string) string {
-	if !sm.top.validated {
-		panic("state machine not finalized")
-	}
-
-	var (
-		bld, bldTrans strings.Builder
-		dump          func(indent int, s *State[E])
-	)
-
-	dump = func(indent int, s *State[E]) {
-		prefix := strings.Repeat("   ", indent)
-
-		if s.name == s.alias {
-			fmt.Fprintf(&bld, "%sstate %s", prefix, s.alias)
-		} else {
-			fmt.Fprintf(&bld, "%sstate \"%s\" as %s", prefix, s.name, s.alias)
-		}
-		if !s.IsLeaf() {
-			bld.WriteString(" {\n")
-			for _, child := range s.children {
-				dump(indent+1, child)
-			}
-			bld.WriteString(prefix)
-			bld.WriteString("}")
-		}
-		bld.WriteString("\n")
-		if s.entry != nil {
-			fmt.Fprintf(&bld, "%s%s : entry / %s\n", prefix, s.alias, s.entryName)
-		}
-		if s.exit != nil {
-			fmt.Fprintf(&bld, "%s%s : exit / %s\n", prefix, s.alias, s.exitName)
-		}
-
-		if s.parent.initial == s {
-			fmt.Fprintf(&bld, "%s[*] --> %s\n", prefix, s.alias)
-		}
-
-		// combine multiple arrows connecting same src and dst into one
-		type arrow struct{ src, dst string }
-		local, normal := make(map[arrow][]string), make(map[arrow][]string)
-
-		for _, t := range s.transitions {
-			var hist string
-			if t.history == HistoryShallow {
-				hist = "[H]"
-			} else if t.history == HistoryDeep {
-				hist = "[H*]"
-			}
-			if t.internal {
-				fmt.Fprintf(&bld, "%s%s : %s%s\n", prefix, s.alias, evNameMapper(t.eventId), t)
-				continue
-			}
-			var m map[arrow][]string // maps arrow to label above arrow
-			if t.local {
-				m = local
-			} else {
-				m = normal
-			}
-			a := arrow{s.alias, t.target.alias + hist}
-			m[a] = append(m[a], evNameMapper(t.eventId)+t.String())
-		}
-
-		for a, labels := range local {
-			fmt.Fprintf(&bld, "%s%s --> %s : %s\n", prefix, a.src, a.dst, strings.Join(labels, "\\n"))
-		}
-		for a, labels := range normal {
-			fmt.Fprintf(&bldTrans, "%s --> %s : %s\n", a.src, a.dst, strings.Join(labels, "\\n"))
-		}
-	}
-
-	bld.WriteString("@startuml\n\n")
-	sm.terminal.alias = "[*]"
-	for _, s := range sm.top.children {
-		if s != &sm.terminal {
-			dump(0, s)
-		}
-	}
-	bld.WriteString(bldTrans.String())
-	bld.WriteString("\n@enduml\n")
-	return bld.String()
 }
 
 // Initialize initializes this instance.
