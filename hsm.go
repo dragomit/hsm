@@ -134,6 +134,11 @@ func (sm *StateMachine[E]) DiagramPUML(evNameMapper func(int) string) string {
 		if s.parent.initial == s {
 			fmt.Fprintf(&bld, "%s[*] --> %s\n", prefix, s.alias)
 		}
+
+		// combine multiple arrows connecting same src and dst into one
+		type arrow struct{ src, dst string }
+		local, normal := make(map[arrow][]string), make(map[arrow][]string)
+
 		for _, t := range s.transitions {
 			var hist string
 			if t.history == HistoryShallow {
@@ -143,11 +148,23 @@ func (sm *StateMachine[E]) DiagramPUML(evNameMapper func(int) string) string {
 			}
 			if t.internal {
 				fmt.Fprintf(&bld, "%s%s : %s%s\n", prefix, s.alias, evNameMapper(t.eventId), t)
-			} else if t.local {
-				fmt.Fprintf(&bld, "%s%s --> %s%s : %s%s\n", prefix, s.alias, t.target.alias, hist, evNameMapper(t.eventId), t)
-			} else {
-				fmt.Fprintf(&bldTrans, "%s --> %s%s : %s%s\n", s.alias, t.target.alias, hist, evNameMapper(t.eventId), t)
+				continue
 			}
+			var m map[arrow][]string // maps arrow to label above arrow
+			if t.local {
+				m = local
+			} else {
+				m = normal
+			}
+			a := arrow{s.alias, t.target.alias + hist}
+			m[a] = append(m[a], evNameMapper(t.eventId)+t.String())
+		}
+
+		for a, labels := range local {
+			fmt.Fprintf(&bld, "%s%s --> %s : %s\n", prefix, a.src, a.dst, strings.Join(labels, "\\n"))
+		}
+		for a, labels := range normal {
+			fmt.Fprintf(&bldTrans, "%s --> %s : %s\n", a.src, a.dst, strings.Join(labels, "\\n"))
 		}
 	}
 
