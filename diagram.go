@@ -2,6 +2,7 @@ package hsm
 
 import (
 	"fmt"
+	om "github.com/wk8/go-ordered-map/v2"
 	"strings"
 )
 
@@ -72,13 +73,18 @@ func (db *DiagramBuilder[E]) Build() string {
 			fmt.Fprintf(&bld, "%s[*] --> %s\n", prefix, s.alias)
 		}
 
-		// combine multiple arrows connecting same src and dst into one
-		type edgeH struct {
+		// combine multiple arrows connecting same src and dst into one, by putting together labels
+		// and separating them with newline
+		type edgeH struct { // edge in statechart, with src, dst, and history type
 			src, dst *State[E]
 			hist     string
 		}
-		local, normal := make(map[edgeH][]string), make(map[edgeH][]string)
+		// map edge to slice of labels, separately for local and normal transitions
+		// use ordered map, so output is deterministic and defined by order in which transitions were defined
+		local := om.New[edgeH, []string]()
+		normal := om.New[edgeH, []string]()
 
+		// iterate over all transitions to populate local and normal maps; process internal transitions in-place
 		for _, t := range s.transitions {
 			var hist string
 			if t.history == HistoryShallow {
@@ -90,14 +96,15 @@ func (db *DiagramBuilder[E]) Build() string {
 				fmt.Fprintf(&bld, "%s%s : %s%s\n", prefix, s.alias, evNameMapper(t.eventId), t)
 				continue
 			}
-			var m map[edgeH][]string // maps edgeH to label above edgeH
+			var m *om.OrderedMap[edgeH, []string] // maps edgeH to label above edgeH
 			if t.local {
 				m = local
 			} else {
 				m = normal
 			}
 			e := edgeH{src: s, dst: t.target, hist: hist}
-			m[e] = append(m[e], evNameMapper(t.eventId)+t.String())
+			labels, _ := m.Get(e)
+			m.Set(e, append(labels, evNameMapper(t.eventId)+t.String()))
 		}
 
 		arrow := func(src, dst *State[E]) string {
@@ -107,10 +114,12 @@ func (db *DiagramBuilder[E]) Build() string {
 			return db.defaultArrow
 		}
 
-		for e, labels := range local {
+		for pair := local.Oldest(); pair != nil; pair = pair.Next() {
+			e, labels := pair.Key, pair.Value
 			fmt.Fprintf(&bld, "%s%s %s %s%s : %s\n", prefix, e.src.alias, arrow(e.src, e.dst), e.dst.alias, e.hist, strings.Join(labels, "\\n"))
 		}
-		for e, labels := range normal {
+		for pair := normal.Oldest(); pair != nil; pair = pair.Next() {
+			e, labels := pair.Key, pair.Value
 			fmt.Fprintf(&bldTrans, "%s %s %s%s : %s\n", e.src.alias, arrow(e.src, e.dst), e.dst.alias, e.hist, strings.Join(labels, "\\n"))
 		}
 	}

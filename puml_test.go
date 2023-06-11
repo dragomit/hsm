@@ -44,7 +44,7 @@ func TestPumlExample1(t *testing.T) {
 	state3.Transition(evSucceeded, nil).Action("Save Result", func(hsm.Event, struct{}) {}).Build()
 
 	sm.Finalize()
-	fmt.Println(sm.DiagramPUML(func(i int) string {
+	fmt.Println(sm.DiagramBuilder(func(i int) string {
 		return []string{
 			"New data",
 			"Enough data",
@@ -55,6 +55,6 @@ func TestPumlExample1(t *testing.T) {
 			"Deep resume",
 			"Aborted",
 		}[i]
-	}))
-
+	}).DefaultArrow("->").Arrow(state2, state3, "--->").Build())
+	fmt.Println("end")
 }
